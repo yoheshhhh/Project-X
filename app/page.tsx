@@ -27,13 +27,21 @@ export default function Home() {
           and <span className="text-blue-300 font-medium">evolves with you</span>.
         </p>
 
-        {/* CTA Button */}
-        <button
-          onClick={() => router.push('/login')}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold text-lg px-10 py-4 rounded-xl transition-all hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25"
-        >
-          Get Started →
-        </button>
+        {/* CTA Buttons */}
+        <div className="flex flex-wrap justify-center gap-4">
+          <button
+            onClick={() => router.push('/login')}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold text-lg px-10 py-4 rounded-xl transition-all hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25"
+          >
+            Get Started →
+          </button>
+          <button
+            onClick={() => router.push('/watch')}
+            className="bg-slate-600 hover:bg-slate-500 text-white font-semibold text-lg px-10 py-4 rounded-xl transition-all"
+          >
+            Content Engine (Watch) →
+          </button>
+        </div>
 
         {/* Feature Pills */}
         <div className="flex flex-wrap justify-center gap-3 mt-12">
