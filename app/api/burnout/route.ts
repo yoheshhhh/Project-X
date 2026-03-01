@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeBurnoutRisk } from '@/lib/azure-ai';
+import { analyzeBurnoutRisk } from '@/lib/gemini-ai';
 import { logger } from '@/lib/logger';
 
 const log = logger.child('API:Burnout');
