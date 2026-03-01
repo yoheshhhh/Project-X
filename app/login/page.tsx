@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       if (isLogin) {
         const result = await loginUser(email, password);
-        if (result.success) { router.push('/quiz'); } else { setError(result.error || 'Login failed'); }
+        if (result.success) { router.push('/dashboard'); } else { setError(result.error || 'Login failed'); }
       } else {
         const result = await registerUser(email, password, role, name);
         if (result.success) { router.push('/quiz'); } else { setError(result.error || 'Registration failed'); }

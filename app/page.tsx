@@ -35,12 +35,6 @@ export default function Home() {
           >
             Get Started →
           </button>
-          <button
-            onClick={() => router.push('/watch')}
-            className="bg-slate-600 hover:bg-slate-500 text-white font-semibold text-lg px-10 py-4 rounded-xl transition-all"
-          >
-            Content Engine (Watch) →
-          </button>
         </div>
 
         {/* Feature Pills */}
