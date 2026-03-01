@@ -281,7 +281,7 @@ Analyze study patterns for burnout risk.
 
 | Member | Role | Responsibilities |
 |--------|------|-----------------|
-| Person 1 (Karthik) | Architect | Project setup, integration, dashboard, docs |
+| Person 1 Narhen | Architect | Project setup, integration, dashboard, docs |
 | Person 2 | Gatekeeper | Login, SSO simulation, Learner DNA quiz |
 | Person 3 | Content Engine | Video player, quiz gates, "I'm Lost" button |
 | Person 4 | AI Brain | All Azure OpenAI integrations, API routes |
