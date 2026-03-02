@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const mockData = {
   student: { name: 'Narhen K.', email: 'student@ntu.edu.sg', persona: 'Long-term Gradual Learner', streak: 7 },
@@ -18,7 +18,7 @@ const mockData = {
     { quiz: 'M2 S1', score: 80 }, { quiz: 'M2 S2', score: 85 }, { quiz: 'M3 S1', score: 70 },
   ],
   peerComparison: { you: 78, cohortAvg: 65, top10: 92 },
-  burnout: { riskLevel: 'low', riskScore: 15, signals: [], recommendation: 'Your study patterns look healthy! Keep it up.' },
+  burnout: { riskLevel: 'low', riskScore: 15, signals: [], breakdown: [], recommendation: 'Your study patterns look healthy! Keep it up.', schedule: null, weeklyTip: '', mentalHealthResources: [] },
   flashcardsGenerated: 24,
   practiceQuestionsAttempted: 47,
   imLostClicks: 3,
@@ -56,8 +56,9 @@ export default function DashboardPage() {
         body: JSON.stringify({ sessionsThisWeek: 12, avgDurationMinutes: 120, avgSessionHour: 22, scoresTrend: [90, 85, 70], streakDays: 14, totalHoursThisWeek: 28 }),
       });
       const result = await res.json();
-      setBurnout({ riskLevel: result.riskLevel || "low", riskScore: result.riskScore || 0, signals: result.signals || [], recommendation: result.recommendation || "Your study patterns look healthy!" });
-    } catch { setBurnout({ riskLevel: 'moderate', riskScore: 45, signals: ['Late night studying', 'Declining scores'], recommendation: 'Consider taking a break and getting some rest.' }); }
+      const b = result || {};
+      setBurnout({ riskLevel: b.riskLevel || 'low', riskScore: b.riskScore || 0, signals: b.signals || [], breakdown: b.breakdown || [], recommendation: b.recommendation || 'Your study patterns look healthy!', schedule: b.schedule || null, weeklyTip: b.weeklyTip || '', mentalHealthResources: b.mentalHealthResources || [] });
+    } catch { setBurnout({ riskLevel: 'moderate', riskScore: 45, signals: ['Late night studying', 'Declining scores'], breakdown: [], recommendation: 'Consider taking a break.', schedule: null, weeklyTip: 'Try sleeping before midnight tonight.', mentalHealthResources: [] }); }
     setBurnoutLoading(false);
   };
 
@@ -85,7 +86,8 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
           <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button><button onClick={() => window.location.href = '/community'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Community</button>
+            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button>
+            <button onClick={() => window.location.href = '/community'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Community</button>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">N</div>
               <span className="text-sm text-slate-300">{data.student.name}</span>
@@ -95,7 +97,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Welcome + Stats Row */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-white mb-1">Welcome back, {data.student.name.split(' ')[0]}! 👋</h2>
           <p className="text-slate-400 text-sm">Learner DNA: <span className="text-violet-300 font-medium">{data.student.persona}</span></p>
@@ -229,35 +230,104 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500 mt-3">📊 All comparisons are anonymous. No individual data is shared.</p>
             </div>
 
-            {/* Burnout Detector */}
+            {/* Enhanced Burnout Detector */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">🧘 Burnout Check</h3>
+                <h3 className="text-lg font-bold text-white">🧘 AI Burnout Analysis</h3>
                 <button onClick={checkBurnout} disabled={burnoutLoading} className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-all">
-                  {burnoutLoading ? '...' : '🔄 Check Now'}
+                  {burnoutLoading ? '⏳ AI analyzing...' : '🔄 Check Now'}
                 </button>
               </div>
-              <div className={`p-4 rounded-xl border mb-3 ${burnout.riskLevel === 'low' ? 'bg-green-500/10 border-green-500/20' : burnout.riskLevel === 'moderate' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">{burnout.riskLevel === 'low' ? '😊' : burnout.riskLevel === 'moderate' ? '😐' : '😰'}</span>
-                  <span className={`text-sm font-bold ${burnout.riskLevel === 'low' ? 'text-green-300' : burnout.riskLevel === 'moderate' ? 'text-amber-300' : 'text-red-300'}`}>
-                    {burnout.riskLevel.charAt(0).toUpperCase() + burnout.riskLevel.slice(1)} Risk
-                  </span>
-                  <span className="text-xs text-slate-400 ml-auto">Score: {burnout.riskScore}/100</span>
+              {burnoutLoading ? (
+                <div className="text-center py-6">
+                  <svg className="animate-spin h-8 w-8 mx-auto text-violet-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  <p className="text-sm text-violet-300">AI is analyzing your study patterns...</p>
                 </div>
-                {/* Risk bar */}
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-3">
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${burnout.riskScore}%`, backgroundColor: burnout.riskLevel === 'low' ? '#22c55e' : burnout.riskLevel === 'moderate' ? '#f59e0b' : '#ef4444' }} />
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">{burnout.recommendation}</p>
-              </div>
-              {burnout.signals && burnout.signals.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-400 font-medium">Signals detected:</p>
-                  {burnout.signals.map((s, i) => (
-                    <p key={i} className="text-xs text-slate-500">⚠️ {s}</p>
-                  ))}
-                </div>
+              ) : (
+                <>
+                  <div className={`p-4 rounded-xl border mb-3 ${burnout.riskLevel === 'low' ? 'bg-green-500/10 border-green-500/20' : burnout.riskLevel === 'moderate' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{burnout.riskLevel === 'low' ? '😊' : burnout.riskLevel === 'moderate' ? '😐' : '😰'}</span>
+                      <span className={`text-sm font-bold ${burnout.riskLevel === 'low' ? 'text-green-300' : burnout.riskLevel === 'moderate' ? 'text-amber-300' : 'text-red-300'}`}>
+                        {(burnout.riskLevel || 'low').charAt(0).toUpperCase() + (burnout.riskLevel || 'low').slice(1)} Risk
+                      </span>
+                      <span className="text-xs text-slate-400 ml-auto">Score: {burnout.riskScore || 0}/100</span>
+                    </div>
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${burnout.riskScore || 0}%`, backgroundColor: burnout.riskLevel === 'low' ? '#22c55e' : burnout.riskLevel === 'moderate' ? '#f59e0b' : '#ef4444' }} />
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{burnout.recommendation}</p>
+                  </div>
+
+                  {/* Signal Breakdown */}
+                  {burnout.breakdown && burnout.breakdown.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-slate-400 font-medium mb-2">📊 Signal Breakdown</p>
+                      <div className="space-y-2">
+                        {burnout.breakdown.map((b, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white/5">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${b.status === 'healthy' ? 'bg-green-400' : b.status === 'warning' ? 'bg-amber-400' : 'bg-red-400'}`} />
+                              <span className="text-xs text-slate-300">{b.signal}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-slate-400">{b.value}</span>
+                              {b.points > 0 && <span className="text-xs text-red-400">+{b.points}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Study Schedule */}
+                  {burnout.schedule && (
+                    <div className="mb-3 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                      <p className="text-xs font-medium text-violet-300 mb-2">📅 AI-Suggested Schedule</p>
+                      <div className="space-y-2">
+                        {[
+                          { icon: '🌅', label: 'Morning', value: burnout.schedule.morning },
+                          { icon: '☀️', label: 'Afternoon', value: burnout.schedule.afternoon },
+                          { icon: '🌆', label: 'Evening', value: burnout.schedule.evening },
+                          { icon: '🌙', label: 'Night', value: burnout.schedule.night },
+                        ].map((s) => (
+                          <div key={s.label} className="flex items-start gap-2">
+                            <span className="text-sm">{s.icon}</span>
+                            <div>
+                              <span className="text-xs font-medium text-slate-300">{s.label}: </span>
+                              <span className="text-xs text-slate-400">{s.value}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Weekly Tip */}
+                  {burnout.weeklyTip && (
+                    <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <p className="text-xs text-blue-300">💡 <span className="font-medium">Tip:</span> {burnout.weeklyTip}</p>
+                    </div>
+                  )}
+
+                  {/* Mental Health Resources */}
+                  {burnout.mentalHealthResources && burnout.mentalHealthResources.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-slate-400 font-medium mb-2">🫂 NTU Support Resources</p>
+                      <div className="space-y-2">
+                        {burnout.mentalHealthResources.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white/5">
+                            <div>
+                              <p className="text-xs text-slate-300">{r.name}</p>
+                              <p className="text-xs text-slate-500">{r.type}</p>
+                            </div>
+                            <span className="text-xs text-blue-400">{r.contact}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
