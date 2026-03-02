@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User profile: only the signed-in user can read/write their own doc (login + persona save)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Module progress: document contains userId; only that user can read/write
+    match /moduleProgress/{docId} {
+      allow read, write: if request.auth != null
+        && (resource == null || resource.data.userId == request.auth.uid)
+        && (request.resource == null || request.resource.data.userId == request.auth.uid);
+    }
+    // Quiz results: document contains uid; only that user can read/write
+    match /quizResults/{docId} {
+      allow read, write: if request.auth != null
+        && (resource == null || resource.data.uid == request.auth.uid)
+        && (request.resource == null || request.resource.data.uid == request.auth.uid);
+    }
+    // Segment quiz scores (content engine): one doc per user per module per segment
+    match /segmentQuizScores/{docId} {
+      allow read, write: if request.auth != null
+        && (resource == null || resource.data.uid == request.auth.uid)
+        && (request.resource == null || request.resource.data.uid == request.auth.uid);
+    }
+    // Study sessions: allow authenticated users to create
+    match /studySessions/{sessionId} {
+      allow create: if request.auth != null;
+      allow read, delete: if request.auth != null;
+    }
+  }
+}

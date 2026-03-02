@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LEARNER_TYPES, getLearnerType } from '@/data/learnerTypes';
+import { auth, savePersona } from '@/lib/firebase';
+import type { LearnerPersona } from '@/lib/firebase';
 
 const questions = [
   { id: 'pq1', question: 'When preparing for an exam, I typically...', options: [{ value: 'short-term-intensive', label: 'Cram intensively in the last few days' }, { value: 'long-term-gradual', label: 'Study a little bit every day over weeks' }], key: 'learningStyle' },
@@ -11,7 +14,44 @@ const questions = [
   { id: 'pq5', question: 'Which question format do you prefer?', options: [{ value: 'mcq', label: 'Multiple Choice (MCQ)' }, { value: 'short-answer', label: 'Short Answer (1-3 sentences)' }, { value: 'essay', label: 'Long-form / Essay' }], key: 'preferredQuestionFormat' },
   { id: 'pq6', question: 'A farmer has 17 sheep. All but 9 die. How many sheep are left?', options: [{ value: '8', label: '8 sheep' }, { value: '9', label: '9 sheep', correct: true }, { value: '17', label: '17 sheep' }, { value: '0', label: '0 sheep' }], key: 'cognitive1', type: 'iq' },
   { id: 'pq7', question: 'If you rearrange the letters "CIFAIPC", you get the name of a(n):', options: [{ value: 'ocean', label: 'Ocean', correct: true }, { value: 'city', label: 'City' }, { value: 'animal', label: 'Animal' }, { value: 'country', label: 'Country' }], key: 'cognitive2', type: 'iq' },
+  { id: 'pq8', question: 'What number comes next: 2, 4, 6, 8, ?', options: [{ value: '9', label: '9' }, { value: '10', label: '10', correct: true }, { value: '12', label: '12' }, { value: '14', label: '14' }], key: 'cognitive3', type: 'iq' },
+  { id: 'pq9', question: 'If all A are B, and all B are C, then all A are C. True or false?', options: [{ value: 'true', label: 'True', correct: true }, { value: 'false', label: 'False' }], key: 'cognitive4', type: 'iq' },
+  { id: 'pq10', question: 'An item is $50. With 20% off, the sale price is:', options: [{ value: '45', label: '$45' }, { value: '40', label: '$40', correct: true }, { value: '30', label: '$30' }, { value: '10', label: '$10' }], key: 'cognitive5', type: 'iq' },
 ];
+
+const COGNITIVE_QUESTIONS = [
+  { key: 'cognitive1', correct: '9' },
+  { key: 'cognitive2', correct: 'ocean' },
+  { key: 'cognitive3', correct: '10' },
+  { key: 'cognitive4', correct: 'true' },
+  { key: 'cognitive5', correct: '40' },
+];
+const COGNITIVE_MAX = 100;
+const PTS_PER_COGNITIVE = COGNITIVE_MAX / COGNITIVE_QUESTIONS.length;
+
+function computeCognitiveScore(answers: Record<string, string>): number {
+  let raw = 0;
+  COGNITIVE_QUESTIONS.forEach(({ key, correct }) => {
+    if (answers[key] === correct) raw += PTS_PER_COGNITIVE;
+  });
+  return Math.round(Math.min(COGNITIVE_MAX, raw));
+}
+
+function computeReadinessScore(profile: {
+  studyDaysPerWeek: number;
+  studyHoursPerDay: number;
+  examPrepWeek: number;
+  cognitiveScore: number;
+}): number {
+  const consistency = Math.min(100, (profile.studyDaysPerWeek / 7) * 100);
+  const timeInvestment = profile.studyHoursPerDay >= 5 ? 100 : profile.studyHoursPerDay >= 3 ? 75 : profile.studyHoursPerDay >= 2 ? 50 : 25;
+  const planning = profile.examPrepWeek >= 6 ? 100 : profile.examPrepWeek >= 4 ? 70 : profile.examPrepWeek >= 2 ? 40 : 20;
+  const cognitive = profile.cognitiveScore;
+  const readiness = 0.35 * consistency + 0.3 * timeInvestment + 0.2 * planning + 0.15 * cognitive;
+  return Math.round(Math.min(100, Math.max(0, readiness)));
+}
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export default function QuizPage() {
   const router = useRouter();
@@ -20,38 +60,152 @@ export default function QuizPage() {
   const [selected, setSelected] = useState(null);
   const [showResults, setShowResults] = useState(false);
   const [persona, setPersona] = useState(null);
+  const [personaLoading, setPersonaLoading] = useState(false);
 
   const progress = ((current) / questions.length) * 100;
   const q = questions[current];
 
-  const handleNext = () => {
+  const getFallbackLearnerTypes = (p: {
+    learningStyle: string;
+    preferredQuestionFormat: string;
+    studyDaysPerWeek: number;
+    studyHoursPerDay: number;
+  }): string[] => {
+    const types: string[] = [];
+    if (p.learningStyle === 'short-term-intensive') types.push('stress');
+    else types.push('ease');
+    if (p.preferredQuestionFormat === 'short-answer' || p.preferredQuestionFormat === 'essay') types.push('scribble');
+    if (p.studyDaysPerWeek >= 6 && p.studyHoursPerDay >= 3) types.push('teach');
+    if (p.preferredQuestionFormat === 'mcq') types.push('visual');
+    return types.slice(0, 3);
+  };
+
+  const getFallbackTraits = (p: {
+    learningStyle: string;
+    studyHoursPerDay: number;
+    readinessScore: number;
+  }) => {
+    const traits: string[] = [];
+    if (p.readinessScore >= 80) traits.push('high-discipline', 'self-directed');
+    if (p.readinessScore >= 60) traits.push('consistent-learner');
+    if (p.learningStyle === 'short-term-intensive') traits.push('focused-learner', 'deadline-driven');
+    else traits.push('self-paced');
+    if (p.studyHoursPerDay >= 3) traits.push('dedicated');
+    return traits.length > 0 ? traits : ['reflective-learner'];
+  };
+
+  const handleNext = async () => {
     if (!selected) return;
-    const newAnswers = { ...answers, [q.key]: selected };
+    const newAnswers: Record<string, string> = { ...answers, [q.key]: selected };
     setAnswers(newAnswers);
     setSelected(null);
 
     if (current < questions.length - 1) {
       setCurrent(current + 1);
     } else {
-      // Build persona
-      const cognitiveScore = (newAnswers.cognitive1 === '9' ? 5 : 0) + (newAnswers.cognitive2 === 'ocean' ? 5 : 0);
-      const p = {
-        learningStyle: newAnswers.learningStyle || 'long-term-gradual',
-        studyHoursPerDay: parseInt(newAnswers.studyHoursPerDay) || 2,
-        studyDaysPerWeek: parseInt(newAnswers.studyDaysPerWeek) || 4,
-        examPrepWeek: parseInt(newAnswers.examPrepWeek) || 2,
-        preferredQuestionFormat: newAnswers.preferredQuestionFormat || 'mcq',
-        cognitiveScore: cognitiveScore,
+      let cognitiveScore = computeCognitiveScore(newAnswers);
+      const learningStyle = newAnswers.learningStyle || 'long-term-gradual';
+      const studyHoursPerDay = parseInt(newAnswers.studyHoursPerDay) || 2;
+      const studyDaysPerWeek = parseInt(newAnswers.studyDaysPerWeek) || 4;
+      const examPrepWeek = parseInt(newAnswers.examPrepWeek) || 2;
+      const preferredQuestionFormat = newAnswers.preferredQuestionFormat || 'mcq';
+      const p: {
+        learningStyle: string;
+        studyHoursPerDay: number;
+        studyDaysPerWeek: number;
+        examPrepWeek: number;
+        preferredQuestionFormat: string;
+        cognitiveScore: number;
+        readinessScore: number;
+        personalityTraits: string[];
+        learnerTypes: string[];
+      } = {
+        learningStyle,
+        studyHoursPerDay,
+        studyDaysPerWeek,
+        examPrepWeek,
+        preferredQuestionFormat,
+        cognitiveScore,
+        readinessScore: 0,
         personalityTraits: [],
+        learnerTypes: [],
       };
-      if (p.learningStyle === 'short-term-intensive') p.personalityTraits.push('focused-learner', 'deadline-driven');
-      else p.personalityTraits.push('consistent-learner', 'self-paced');
-      if (p.studyHoursPerDay >= 3) p.personalityTraits.push('dedicated');
-      if (cognitiveScore >= 8) p.personalityTraits.push('analytical-thinker');
+      p.readinessScore = computeReadinessScore({
+        studyDaysPerWeek: p.studyDaysPerWeek,
+        studyHoursPerDay: p.studyHoursPerDay,
+        examPrepWeek: p.examPrepWeek,
+        cognitiveScore: p.cognitiveScore,
+      });
+      if (DEMO_MODE) {
+        p.cognitiveScore = Math.max(p.cognitiveScore, 70);
+        p.readinessScore = Math.max(p.readinessScore, 72);
+      }
+      setPersonaLoading(true);
+      try {
+        const res = await fetch('/api/generate-persona-traits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            learningStyle: p.learningStyle,
+            studyHoursPerDay: p.studyHoursPerDay,
+            studyDaysPerWeek: p.studyDaysPerWeek,
+            examPrepWeek: p.examPrepWeek,
+            preferredQuestionFormat: p.preferredQuestionFormat,
+            cognitiveScore: p.cognitiveScore,
+            readinessScore: p.readinessScore,
+            rawAnswers: newAnswers,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (Array.isArray(data.personalityTraits) && data.personalityTraits.length > 0) {
+          p.personalityTraits = data.personalityTraits;
+        } else {
+          p.personalityTraits = getFallbackTraits(p);
+        }
+        if (Array.isArray(data.learnerTypes) && data.learnerTypes.length > 0) {
+          p.learnerTypes = data.learnerTypes.filter((id: string) => getLearnerType(id));
+        } else {
+          p.learnerTypes = getFallbackLearnerTypes(p);
+        }
+      } catch {
+        p.personalityTraits = getFallbackTraits(p);
+        p.learnerTypes = getFallbackLearnerTypes(p);
+      } finally {
+        setPersonaLoading(false);
+      }
       setPersona(p);
       setShowResults(true);
+      if (auth.currentUser && p) {
+        const toSave: LearnerPersona = {
+          learningStyle: p.learningStyle as LearnerPersona['learningStyle'],
+          studyHoursPerDay: p.studyHoursPerDay,
+          studyDaysPerWeek: p.studyDaysPerWeek,
+          examPrepWeek: p.examPrepWeek,
+          preferredQuestionFormat: p.preferredQuestionFormat as LearnerPersona['preferredQuestionFormat'],
+          cognitiveScore: p.cognitiveScore,
+          readinessScore: p.readinessScore,
+          personalityTraits: p.personalityTraits,
+          learnerTypes: p.learnerTypes,
+        };
+        savePersona(auth.currentUser.uid, toSave).catch((e) => console.error('Failed to save persona', e));
+      }
     }
   };
+
+  if (personaLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center px-4">
+        <div className="w-full max-w-lg text-center">
+          <div className="text-5xl mb-4">🧬</div>
+          <h1 className="text-xl font-bold text-white mb-2">Generating your Learner DNA</h1>
+          <p className="text-slate-400 text-sm mb-6">AI is reading your answers and inferring your learning personality...</p>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden max-w-xs mx-auto">
+            <div className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showResults && persona) {
     return (
@@ -83,10 +237,34 @@ export default function QuizPage() {
               <span className="text-sm text-slate-300">Preferred Format</span>
               <span className="text-sm font-bold text-rose-300">{persona.preferredQuestionFormat.toUpperCase()}</span>
             </div>
-            <div className="flex items-center justify-between p-4 bg-teal-500/10 border border-teal-500/20 rounded-xl">
-              <span className="text-sm text-slate-300">Cognitive Score</span>
-              <span className="text-sm font-bold text-teal-300">{persona.cognitiveScore}/10</span>
+            <div className="flex items-center justify-between p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <span className="text-sm text-slate-300">Learning Readiness</span>
+              <span className="text-sm font-bold text-emerald-300">{persona.readinessScore ?? 0}/100</span>
             </div>
+            <div className="flex items-center justify-between p-4 bg-teal-500/10 border border-teal-500/20 rounded-xl">
+              <span className="text-sm text-slate-300">Reasoning (cognitive)</span>
+              <span className="text-sm font-bold text-teal-300">{persona.cognitiveScore}/100</span>
+            </div>
+            {(persona.learnerTypes?.length ?? 0) > 0 && (
+              <div className="pt-2">
+                <p className="text-xs text-slate-400 mb-2">Your learner type(s)</p>
+                <div className="space-y-2">
+                  {(persona.learnerTypes || []).map((id) => {
+                    const t = getLearnerType(id);
+                    if (!t) return null;
+                    return (
+                      <div key={t.id} className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                        <span className="text-lg">{t.icon}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-white">{t.label}</p>
+                          <p className="text-xs text-slate-400">{t.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="pt-2">
               <p className="text-xs text-slate-400 mb-2">Personality Traits</p>
               <div className="flex flex-wrap gap-2">

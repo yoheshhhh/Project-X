@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { QuizModal } from '@/components/QuizModal';
 import { ChatbotModal } from '@/components/ChatbotModal';
@@ -10,11 +11,12 @@ import { demoModule } from '@/data/demoModule';
 import { getSegmentFlashcards } from '@/data/segmentFlashcards';
 import { progressService } from '@/lib/progress';
 import { aiHelpService } from '@/lib/ai-help';
+import { auth, onAuthStateChanged } from '@/lib/firebase';
 import type { Segment, ModuleProgress, QuizQuestion } from '@/types/learning';
 import type { Flashcard } from '@/lib/ai-help';
 
 const DEMO_USER = 'user-1';
-const MODULE_ID = 'demo-1';
+const DEFAULT_MODULE_ID = 'demo-1';
 const COOLDOWN_MS = 60_000; // 1 min after 429 before allowing retry
 
 function buildSegments(duration: number, count: number): Segment[] {
@@ -26,6 +28,11 @@ function buildSegments(duration: number, count: number): Segment[] {
 }
 
 export default function WatchPage() {
+  const searchParams = useSearchParams();
+  const moduleId = searchParams.get('moduleId') || DEFAULT_MODULE_ID;
+  /** Topic for this video — from the link that opened this page. Used for heading and Firebase (moduleProgress, segmentQuizScores). */
+  const pageTopic = searchParams.get('topic')?.trim() || 'Software Security II';
+  const [userId, setUserId] = useState<string>(DEMO_USER);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [progress, setProgressState] = useState<ModuleProgress | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
@@ -84,8 +91,15 @@ export default function WatchPage() {
     return promise;
   }, []);
 
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUserId(u?.uid ?? DEMO_USER);
+    });
+    return () => unsub();
+  }, []);
+
   const loadProgress = useCallback(async () => {
-    const p = await progressService.getProgress(DEMO_USER, MODULE_ID);
+    const p = await progressService.getProgress(userId, moduleId);
     if (p) {
       if (p.reachedSegmentEndIndex === undefined) {
         const scores = p.quizScores ?? {};
@@ -95,9 +109,11 @@ export default function WatchPage() {
       }
       setProgressState(p);
     } else {
-      setProgressState({ userId: DEMO_USER, moduleId: MODULE_ID, unlockedSegmentIndex: 0, reachedSegmentEndIndex: -1, segmentAttempts: {}, segmentMastery: {}, quizScores: {} });
+      const initial = { userId, moduleId, moduleName: pageTopic, moduleTopic: pageTopic, unlockedSegmentIndex: 0, reachedSegmentEndIndex: -1, segmentAttempts: {}, segmentMastery: {}, quizScores: {} };
+      setProgressState(initial);
+      progressService.setProgress(initial);
     }
-  }, []);
+  }, [userId, moduleId, pageTopic]);
 
   useEffect(() => { loadProgress(); }, [loadProgress]);
 
@@ -106,7 +122,7 @@ export default function WatchPage() {
   }, []);
 
   useEffect(() => {
-    fetch(`/api/segment-slides?moduleId=${MODULE_ID}`)
+    fetch(`/api/segment-slides?moduleId=${encodeURIComponent(moduleId)}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data.segmentSlides) && data.segmentSlides.length > 0) {
@@ -114,7 +130,15 @@ export default function WatchPage() {
         }
       })
       .catch(() => { /* keep null, use demo fallback */ });
-  }, []);
+  }, [moduleId]);
+
+  useEffect(() => {
+    if (progress && progress.moduleTopic !== pageTopic) {
+      const updated = { ...progress, moduleTopic: pageTopic };
+      setProgressState(updated);
+      progressService.setProgress(updated);
+    }
+  }, [progress, pageTopic]);
 
   const effectiveSegmentSlides = segmentSlidesFromApi ?? demoModule.segmentSlides ?? [];
 
@@ -143,12 +167,12 @@ export default function WatchPage() {
     if (!effectiveSegmentSlides[segmentIndex]) return;
     setQuizSegmentIndex(segmentIndex);
     setQuizOpen(true);
-    progressService.recordSegmentReached(DEMO_USER, MODULE_ID, segmentIndex).then(loadProgress);
+    progressService.recordSegmentReached(userId, moduleId, segmentIndex).then(loadProgress);
   }, [loadProgress, effectiveSegmentSlides]);
 
   const handleQuizPass = useCallback(
     async (score: number) => {
-      await progressService.recordQuizResult(DEMO_USER, MODULE_ID, quizSegmentIndex, score);
+      await progressService.recordQuizResult(userId, moduleId, quizSegmentIndex, score);
       await loadProgress();
       setQuizOpen(false);
       setPaused(false);
@@ -157,7 +181,7 @@ export default function WatchPage() {
   );
 
   const handleQuizFail = useCallback(async () => {
-    await progressService.recordQuizAttempt(DEMO_USER, MODULE_ID, quizSegmentIndex);
+    await progressService.recordQuizAttempt(userId, moduleId, quizSegmentIndex);
     await loadProgress();
   }, [quizSegmentIndex, loadProgress]);
 
@@ -175,6 +199,7 @@ export default function WatchPage() {
           if (Array.isArray(data.flashcards) && data.flashcards.length > 0) {
             setFlashcards(data.flashcards);
             setQuizOpen(false);
+            await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
             setFlashcardOpen(true);
             return;
           }
@@ -186,8 +211,9 @@ export default function WatchPage() {
     const cards = getSegmentFlashcards(quizSegmentIndex);
     setFlashcards(cards.length > 0 ? cards : await aiHelpService.getFlashcards(quizSegmentIndex));
     setQuizOpen(false);
+    await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
     setFlashcardOpen(true);
-  }, [quizSegmentIndex, effectiveSegmentSlides]);
+  }, [quizSegmentIndex, effectiveSegmentSlides, userId, moduleId]);
 
   const handleLostClick = useCallback(() => {
     setChatbotOpen(true);
@@ -270,9 +296,10 @@ export default function WatchPage() {
         {/* Header */}
         <header className="mb-8">
           <p className="font-medium text-indigo-300/90 text-sm uppercase tracking-widest mb-1">Content Engine</p>
-          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl md:text-4xl font-bold tracking-tight text-white">
-            Watch
+          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-2xl md:text-3xl font-bold tracking-tight text-white">
+            {pageTopic}
           </h1>
+          <p className="mt-1 text-slate-500 font-mono text-sm">{moduleId}</p>
           <p className="mt-2 text-slate-400 text-sm max-w-xl">
             {reached < 0
               ? 'Watch the video to the end of each segment to unlock its quiz.'
@@ -378,6 +405,8 @@ export default function WatchPage() {
         segmentIndex={segmentForLost}
         currentTimeSeconds={currentTime}
         segmentCount={numberOfSegments}
+        moduleTopic={pageTopic}
+        segmentTitle={demoModule.segmentTitles?.[segmentForLost] ?? ''}
       />
       <FlashcardModal
         key={`flashcard-${quizSegmentIndex}`}

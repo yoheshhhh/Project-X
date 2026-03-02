@@ -25,17 +25,46 @@ async function findPdfInContent(contentDir: string): Promise<string | null> {
  * If content/slides.pdf exists, extracts text and splits by page into segments.
  * Otherwise returns the built-in segmentSlides from demoModule.
  */
+/**
+ * True if the line looks like a module/course code or slide metadata, not a topic title.
+ * Skipped: SC3010, 2552-SC3010, CC0006, slide numbers (e.g. 1), short code-only lines.
+ * Not skipped: "Software Security II", "Introduction to Databases" (have spaces / punctuation).
+ */
+function shouldSkipLineForTopic(line: string): boolean {
+  const t = line.trim();
+  if (t.length === 0) return true;
+  if (t.length > 50) return false;
+  if (/^\d+$/.test(t)) return true;
+  if (/^[A-Z0-9\-]+$/i.test(t)) return true;
+  if (/^\d{4}-[A-Z0-9\-]+$/i.test(t)) return true;
+  if (/^[A-Z]{2}\d{4}(-[A-Z0-9\-]*)?$/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Extract module topic from the first slide of the PDF (same slides used for AI).
+ * Skips lines that look like module codes or numbers; returns the first line that
+ * looks like a title (e.g. "Software Security II", "Software Security(II)").
+ * Works for any PDF you add: first page text is split into lines and the first
+ * non-skipped line is used as the topic.
+ */
+function topicFromFirstPage(pages: Array<{ text?: string }>): string | undefined {
+  const first = pages[0];
+  const text = typeof first?.text === 'string' ? first.text.trim() : '';
+  if (!text) return undefined;
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/\s+/g, ' '))
+    .filter((l) => l.length > 0);
+  const topicLine = lines.find((l) => !shouldSkipLineForTopic(l));
+  if (topicLine) return topicLine.slice(0, 300);
+  return lines[0]?.slice(0, 300);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const moduleId = searchParams.get('moduleId') ?? 'demo-1';
-
-    if (moduleId !== demoModule.moduleId) {
-      return NextResponse.json(
-        { error: 'Unknown module', segmentSlides: demoModule.segmentSlides ?? [] },
-        { status: 200 }
-      );
-    }
+    const _moduleId = searchParams.get('moduleId') ?? 'demo-1';
 
     const projectRoot = process.cwd();
     const contentDir = path.join(projectRoot, 'content');
@@ -43,6 +72,7 @@ export async function GET(request: NextRequest) {
     const pdfPath = (await findPdfInContent(contentDir)) ?? slidesPath;
 
     let segmentSlides: string[];
+    let moduleTopic: string | undefined;
 
     try {
       const buffer = await readFile(pdfPath);
@@ -53,6 +83,8 @@ export async function GET(request: NextRequest) {
       const pages = textResult.pages ?? [];
       const totalPages = Math.max(1, pages.length);
       const segmentCount = Math.min(DEFAULT_SEGMENT_COUNT, totalPages);
+
+      if (pages.length > 0) moduleTopic = topicFromFirstPage(pages);
 
       if (segmentCount === 0 || totalPages === 0) {
         segmentSlides = demoModule.segmentSlides ?? [];
@@ -77,6 +109,7 @@ export async function GET(request: NextRequest) {
           pdf: path.basename(pdfPath),
           totalPages,
           segmentCount,
+          moduleTopic: moduleTopic ?? '(none)',
           segmentLengths: segmentSlides.map((s) => s.length),
         });
       }
@@ -88,18 +121,18 @@ export async function GET(request: NextRequest) {
       } else {
         log.error('PDF read or parse failed', { error: msg });
         return NextResponse.json(
-          { error: 'Failed to read or parse PDF', segmentSlides: demoModule.segmentSlides ?? [] },
+          { error: 'Failed to read or parse PDF', segmentSlides: demoModule.segmentSlides ?? [], moduleTopic: undefined },
           { status: 200 }
         );
       }
     }
 
-    return NextResponse.json({ segmentSlides });
+    return NextResponse.json({ segmentSlides, moduleTopic: moduleTopic ?? demoModule.moduleTopic ?? undefined });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     log.error('Segment slides failed', { error: msg });
     return NextResponse.json(
-      { error: 'Server error', segmentSlides: demoModule.segmentSlides ?? [] },
+      { error: 'Server error', segmentSlides: demoModule.segmentSlides ?? [], moduleTopic: demoModule.moduleTopic ?? undefined },
       { status: 500 }
     );
   }

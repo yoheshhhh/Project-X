@@ -11,9 +11,9 @@ const MOCK_COURSES = [
   { id: '2', code: '2552-SC2207-CZ2007', title: 'INTRODUCTION TO DATABASES', status: 'Open', instructor: 'CCDS W. K. Ng', image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=220&fit=crop' },
   { id: '3', code: '2552-SC2207-CZ2007', title: 'INTRODUCTION TO DATABASES (LAB)', status: 'Open', instructor: 'CCDS Zhang Tianwei', image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&h=220&fit=crop' },
   { id: '4', code: '2552-SC2207-CZ2007', title: 'INTRODUCTION TO DATABASES (TUT)', status: 'Open', instructor: 'CCDS Zhang Tianwei', image: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400&h=220&fit=crop' },
-  { id: '5', code: '2552-SC0001', title: 'COMPUTER SECURITY', status: 'Open', instructor: 'CCDS LI YI', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=220&fit=crop' },
-  { id: '6', code: '2552-CC0001', title: 'CAPSTONE PROJECT', status: 'Open', instructor: 'Multiple Instructors', image: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&h=220&fit=crop' },
-  { id: '7', code: '2552-SC0002', title: 'SOFTWARE SECURITY', status: 'Open', instructor: 'CCDS W. K. Ng', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=220&fit=crop' },
+  { id: '5', code: '2552-SC3010', title: 'COMPUTER SECURITY', watchTopic: 'Software Security II', status: 'Open', instructor: 'CCDS LI YI', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=220&fit=crop' },
+  { id: '6', code: '2552-SC3099', title: 'CAPSTONE PROJECT', status: 'Open', instructor: 'Multiple Instructors', image: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&h=220&fit=crop' },
+  { id: '7', code: '2552-SC4012', title: 'SOFTWARE SECURITY', status: 'Open', instructor: 'CCDS W. K. Ng', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=220&fit=crop' },
   { id: '8', code: '2552-CC0006-LEC-ALL', title: 'SUSTAINABILITY: SOC, ECON & ENVT (LEC-ALL) AY2025/26 SEM 2', status: 'Open', instructor: 'Multiple Instructors', image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=220&fit=crop' },
 ];
 
@@ -210,7 +210,7 @@ export default function CoursePage() {
                 </article>
                 );
                 return isComputerSecurity ? (
-                  <Link href="/watch" className="block" key={course.id}>
+                  <Link href={`/watch?moduleId=${encodeURIComponent(course.code)}&topic=${encodeURIComponent((course as { watchTopic?: string }).watchTopic ?? course.title)}`} className="block" key={course.id}>
                     {articleEl}
                   </Link>
                 ) : (

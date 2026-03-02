@@ -31,9 +31,9 @@ export function AppSidebar({ currentPath, onSignOut }: AppSidebarProps) {
       </div>
       <div className="p-4 flex items-center gap-3 border-b border-slate-200/80">
         <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-500/30 ring-2 ring-white">
-          A
+          N
         </div>
-        <span className="text-sm text-slate-700 font-medium truncate">CCDS ARUNKUM...</span>
+        <span className="text-sm text-slate-700 font-medium truncate">CCDS Narhen</span>
       </div>
       <nav className="flex-1 py-4 px-2">
         {SIDEBAR_NAV.map((item) => {

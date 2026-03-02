@@ -8,12 +8,18 @@ export type Segment = { start: number; end: number };
 export type ModuleProgress = {
   userId: string;
   moduleId: string;
+  /** Human-readable course/module title (e.g. "COMPUTER SECURITY") for display */
+  moduleName?: string;
+  /** Topic from first slide of PDF (e.g. "Software Security(II)") — stored in segmentQuizScores as topic */
+  moduleTopic?: string;
   unlockedSegmentIndex: number;
   /** Highest segment index whose end the user has reached by watching (time-based unlock). */
   reachedSegmentEndIndex: number;
   segmentAttempts: Record<number, number>;
   segmentMastery: Record<number, MasteryLevel>;
   quizScores: Record<number, number>;
+  /** How many times the user opened/used flashcards for each segment (segmentIndex -> count). */
+  segmentFlashcardOpens?: Record<number, number>;
   lastWatchedTimestamp?: number;
 };
 

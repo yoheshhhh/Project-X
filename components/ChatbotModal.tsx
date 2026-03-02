@@ -12,6 +12,10 @@ type ChatbotModalProps = {
   segmentIndex?: number;
   currentTimeSeconds?: number;
   segmentCount?: number;
+  /** Module/course topic (e.g. "Computer Security: format strings, printf vulnerabilities") */
+  moduleTopic?: string;
+  /** Title of the current segment (e.g. "Format specifiers and printf vulnerability") */
+  segmentTitle?: string;
 };
 
 function getGeminiClient(): GoogleGenAI | null {
@@ -42,6 +46,8 @@ export function ChatbotModal({
   segmentIndex = 0,
   currentTimeSeconds = 0,
   segmentCount = 1,
+  moduleTopic = '',
+  segmentTitle = '',
 }: ChatbotModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -62,8 +68,14 @@ export function ChatbotModal({
     setInput('');
     chatRef.current = null;
 
-    const context = `The student is watching a learning video. They are on segment ${segmentIndex + 1} of ${segmentCount} (about ${Math.floor(currentTimeSeconds / 60)}:${String(currentTimeSeconds % 60).padStart(2, '0')} in). They clicked "I'm lost" and may ask questions about the content. Be concise and helpful.`;
-    setMessages([{ role: 'model', text: `Hi! You're on segment ${segmentIndex + 1}. Ask me anything about the video or the material—I'm here to help.` }]);
+    const topicContext = [moduleTopic, segmentTitle].filter(Boolean).join('. ');
+    const context = topicContext
+      ? `You are a tutor helping a student with ONE specific video lecture. The subject of this video is ONLY: ${topicContext}. Current segment (${segmentIndex + 1} of ${segmentCount}): "${segmentTitle}". Video time: about ${Math.floor(currentTimeSeconds / 60)}:${String(currentTimeSeconds % 60).padStart(2, '0')}. They clicked "I'm lost". RULES: Answer ONLY about this video's topic (e.g. computer/software security, format strings, vulnerabilities). Do NOT mention or discuss any other subject (no biology, no mathematics/differentiation, no chemistry, no unrelated topics). If the student asks about something outside this video, politely redirect to the current topic. Be concise and helpful.`
+      : `The student is watching a learning video. They are on segment ${segmentIndex + 1} of ${segmentCount} (about ${Math.floor(currentTimeSeconds / 60)}:${String(currentTimeSeconds % 60).padStart(2, '0')} in). They clicked "I'm lost". Be concise and helpful.`;
+    const greeting = segmentTitle
+      ? `Hi! You're on Segment ${segmentIndex + 1}: ${segmentTitle}. ${moduleTopic ? `This module is about: ${moduleTopic}. ` : ''}Ask me anything about this video or the material—I'm here to help.`
+      : `Hi! You're on segment ${segmentIndex + 1}. Ask me anything about the video or the material—I'm here to help.`;
+    setMessages([{ role: 'model', text: greeting }]);
     const ai = getGeminiClient();
     if (ai) {
       try {
@@ -77,7 +89,7 @@ export function ChatbotModal({
     } else {
       setError('Gemini API key is missing. Add NEXT_PUBLIC_GEMINI_API_KEY to your .env.local.');
     }
-  }, [open, segmentIndex, segmentCount, currentTimeSeconds]);
+  }, [open, segmentIndex, segmentCount, currentTimeSeconds, moduleTopic, segmentTitle]);
 
   useEffect(() => {
     scrollToBottom();

@@ -12,7 +12,7 @@
  */
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 import { logger } from './logger';
@@ -29,6 +29,7 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
+export { onAuthStateChanged };
 export const db = getFirestore(app);
 
 // ---- Auth Helpers ----
@@ -64,6 +65,7 @@ export async function registerUser(email: string, password: string, role: string
       createdAt: serverTimestamp(),
       hasCompletedQuiz: false,
       persona: null,
+      learnerTypes: [], // e.g. ['ease','scribble'] for progress tracking & personalization
       streakDays: 0,
       lastStudyDate: null,
     });
@@ -97,14 +99,39 @@ export async function updateUserProfile(uid: string, data: Record<string, any>) 
 }
 
 /**
- * Save the Learner DNA persona object after quiz completion
+ * Save the Learner DNA persona (and learner types) after quiz completion.
+ * Also sets root-level learnerTypes for progress tracking and queries.
  */
 export async function savePersona(uid: string, persona: LearnerPersona) {
-  logger.info('Saving learner persona', { uid, learningStyle: persona.learningStyle });
+  logger.info('Saving learner persona', { uid, learningStyle: persona.learningStyle, learnerTypes: persona.learnerTypes });
   await updateUserProfile(uid, {
     persona,
+    learnerTypes: persona.learnerTypes ?? [],
     hasCompletedQuiz: true,
   });
+}
+
+/**
+ * Ensure a user document exists (e.g. on login). Creates one with defaults if missing.
+ * Use for progress tracking so we always have learnerTypes and profile.
+ */
+export async function ensureUserDoc(uid: string, email: string, displayName?: string | null) {
+  const docRef = doc(db, 'users', uid);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) return snap.data();
+  await setDoc(docRef, {
+    email,
+    displayName: displayName ?? email?.split('@')[0] ?? '',
+    role: 'student',
+    createdAt: serverTimestamp(),
+    hasCompletedQuiz: false,
+    persona: null,
+    learnerTypes: [],
+    streakDays: 0,
+    lastStudyDate: null,
+  });
+  logger.info('Created user doc on login', { uid });
+  return (await getDoc(docRef)).data();
 }
 
 // ---- Quiz & Progress Helpers ----
@@ -119,6 +146,47 @@ export async function saveQuizResult(uid: string, moduleId: string, segmentId: s
     ...result,
     timestamp: serverTimestamp(),
   });
+}
+
+/** Full module progress (unlock, segment reached, attempts, mastery, quiz scores). Used for progress tracking with learner type. */
+export async function getStoredModuleProgress(uid: string, moduleId: string): Promise<Record<string, unknown> | null> {
+  const docRef = doc(db, 'moduleProgress', `${uid}_${moduleId}`);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  return d as Record<string, unknown>;
+}
+
+export async function setStoredModuleProgress(uid: string, moduleId: string, progress: Record<string, unknown>) {
+  const docRef = doc(db, 'moduleProgress', `${uid}_${moduleId}`);
+  await setDoc(docRef, { ...progress, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Save a segment quiz score to Firestore (content engine segment quizzes).
+ * Separate collection from users; used for progress tracking and dashboards.
+ * Doc id: {uid}_{moduleId}_{segmentIndex} — one doc per user per module per segment (last score + attempt count).
+ */
+export async function saveSegmentQuizScore(
+  uid: string,
+  moduleId: string,
+  segmentIndex: number,
+  score: number,
+  attemptNumber: number,
+  topic?: string
+) {
+  const docId = `${uid}_${moduleId}_${segmentIndex}`;
+  const docRef = doc(db, 'segmentQuizScores', docId);
+  const data: Record<string, unknown> = {
+    uid,
+    moduleId,
+    segmentIndex,
+    score,
+    attemptNumber,
+    updatedAt: serverTimestamp(),
+  };
+  if (topic) data.topic = topic;
+  await setDoc(docRef, data, { merge: true });
 }
 
 export async function getModuleProgress(uid: string, moduleId: string) {
@@ -158,10 +226,12 @@ export interface LearnerPersona {
   learningStyle: 'short-term-intensive' | 'long-term-gradual';
   studyHoursPerDay: number;
   studyDaysPerWeek: number;
-  examPrepWeek: number; // weeks before exam they start studying
+  examPrepWeek: number;
   preferredQuestionFormat: 'mcq' | 'short-answer' | 'essay';
-  cognitiveScore: number; // from IQ-style questions (1-10)
+  cognitiveScore: number; // 0-100 reasoning score
+  readinessScore?: number; // 0-100 learning readiness
   personalityTraits: string[];
+  learnerTypes: string[]; // e.g. ['ease', 'scribble']
 }
 
 export interface QuizResult {
