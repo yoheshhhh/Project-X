@@ -24,7 +24,7 @@
 
 ## Overview
 
-NTUlearn addresses a critical gap in modern education: despite the abundance of learning data, most students lack clear, actionable insight into their learning journey. Our platform models each student's evolving learning state through a **Learner DNA Profile**, delivers content through an adaptive **Micro-Learning Engine**, and provides personalized AI-powered guidance via **Azure OpenAI**.
+NTUlearn addresses a critical gap in modern education: despite the abundance of learning data, most students lack clear, actionable insight into their learning journey. Our platform models each student's evolving learning state through a **Learner DNA Profile**, delivers content through an adaptive **Micro-Learning Engine**, and provides personalized AI-powered guidance via **Gemini API key**.
 
 ### Problem We Solve
 
@@ -61,7 +61,7 @@ A 6-pillar adaptive learning system:
 ### 📚 Micro-Learning Engine
 - Lectures broken into short video segments
 - Quiz after each segment — must pass to unlock next (LAMS-style gating)
-- **AI Flashcards**: When a student fails twice, Azure OpenAI generates personalized flashcards
+- **AI Flashcards**: When a student fails twice, Gemini API generates personalized flashcards
 - **"I'm Lost" Button**: One-click simplified 3-sentence summary of any video moment
 - **Peer-Tutoring Trigger**: After 3 failed attempts, connects student with top performer
 - **Practice Paper Generator**: End-of-module AI-generated exam in preferred format
@@ -149,7 +149,7 @@ cp .env.example .env.local
 
 Edit `.env.local` with your credentials:
 - Firebase config (from Firebase Console → Project Settings)
-- Gemini OpenAI key + endpoint (from Azure Portal)
+- Gemini OpenAI key + endpoint (from Gemini Portal)
 
 ### Step 3: Firebase Setup
 
