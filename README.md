@@ -150,7 +150,7 @@ cp .env.example .env.local
 
 Edit `.env.local` with your credentials:
 - Firebase config (from Firebase Console → Project Settings)
-- Azure OpenAI key + endpoint (from Azure Portal)
+- Gemini OpenAI key + endpoint (from Azure Portal)
 
 ### Step 3: Firebase Setup
 
@@ -159,11 +159,14 @@ Edit `.env.local` with your credentials:
 3. Enable Firestore Database
 4. Copy config values to `.env.local`
 
-### Step 4: Azure OpenAI Setup
+### Step 4: Gemini API key Setup
 
-1. Go to [Azure AI Foundry](https://ai.azure.com)
-2. Deploy a GPT-4o model
-3. Copy API key + endpoint to `.env.local`
+1. Go to Google AI Studio - https://aistudio.google.com/
+2. Sign in with your Google account
+3. Click “Get API key”
+4. Click “Create API key”
+5. Copy the generated API key
+6. Add the key to your .env.local file
 
 ---
 
@@ -282,16 +285,16 @@ Analyze study patterns for burnout risk.
 | Member | Role | Responsibilities |
 |--------|------|-----------------|
 | Person 1 Narhen | Architect | Project setup, integration, dashboard, docs |
-| Person 2 | Gatekeeper | Login, SSO simulation, Learner DNA quiz |
-| Person 3 | Content Engine | Video player, quiz gates, "I'm Lost" button |
-| Person 4 | AI Brain | All Azure OpenAI integrations, API routes |
-| Person 5 | Dashboard Designer | Progress tracking, charts, peer comparison |
+| Person 2 Yoheshvaran | Gatekeeper | Login, SSO simulation, Learner DNA quiz |
+| Person 3 Arunkumar | Content Engine | Video player, quiz gates, "I'm Lost" button |
+| Person 4 Nandakishor| AI Brain | Gemini API key integrations, API routes |
+| Person 5 Pranati | Dashboard Designer | Progress tracking, charts, peer comparison |
 
 ---
 
 ## Citations
 
-[1] Microsoft Azure OpenAI Service Documentation. Microsoft Learn. https://learn.microsoft.com/azure/ai-foundry/openai/overview
+[1] Google Gemini API Key Documentation https://cloud.google.com/vertex-ai/docs/generative-ai/get-api-key
 
 [2] Firebase Documentation. Google. https://firebase.google.com/docs
 
