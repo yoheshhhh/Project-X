@@ -122,7 +122,7 @@ A 6-pillar adaptive learning system:
 | Charts | Recharts | Dashboard visualizations |
 | Auth & DB | Firebase Auth + Firestore | User management + data |
 | AI | Gemini API key | Flashcards, summaries, papers, burnout |
-| Deployment | Vercel | One-click deployment |
+| Deployment | Firebase | One-click deployment |
 
 ---
 
@@ -296,7 +296,7 @@ Analyze study patterns for burnout risk.
 
 [2] Firebase Documentation. Google. https://firebase.google.com/docs
 
-[3] Next.js Documentation. Vercel. https://nextjs.org/docs
+[3] Next.js Documentation. Firebase. https://nextjs.org/docs
 
 [4] Tailwind CSS Documentation. https://tailwindcss.com/docs
 
