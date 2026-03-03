@@ -62,6 +62,12 @@ export default function QuizPage() {
   const [persona, setPersona] = useState(null);
   const [personaLoading, setPersonaLoading] = useState(false);
 
+  // AI Quiz Explainer state
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [explanation, setExplanation] = useState(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [wasWrong, setWasWrong] = useState(false);
+
   const progress = ((current) / questions.length) * 100;
   const q = questions[current];
 
@@ -94,101 +100,139 @@ export default function QuizPage() {
     return traits.length > 0 ? traits : ['reflective-learner'];
   };
 
+  const fetchExplanation = async (question: string, userAnswer: string, correctAnswer: string, topic: string, allOptions: string[]) => {
+    setExplanationLoading(true);
+    try {
+      const res = await fetch('/api/quiz-explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, userAnswer, correctAnswer, topic, allOptions }),
+      });
+      setExplanation(await res.json());
+    } catch {
+      setExplanation({
+        whyWrong: 'Could not load explanation.',
+        whyCorrect: `The correct answer is "${correctAnswer}".`,
+        concept: topic,
+        quickTip: 'Read the question carefully and consider all options.',
+        confidenceBoost: 'Keep going — every mistake is a learning opportunity!',
+      });
+    }
+    setExplanationLoading(false);
+    setShowExplanation(true);
+  };
+
   const handleNext = async () => {
     if (!selected) return;
+
+    // If showing explanation, dismiss it and move to next
+    if (showExplanation) {
+      setShowExplanation(false);
+      setExplanation(null);
+      setWasWrong(false);
+      // Move to next question
+      if (current < questions.length - 1) {
+        setCurrent(current + 1);
+        setSelected(null);
+      }
+      return;
+    }
+
     const newAnswers: Record<string, string> = { ...answers, [q.key]: selected };
     setAnswers(newAnswers);
+
+    // Check if cognitive question was answered wrong
+    if (q.type === 'iq') {
+      const correctOption = q.options.find(o => o.correct);
+      if (correctOption && selected !== correctOption.value) {
+        setWasWrong(true);
+        const userLabel = q.options.find(o => o.value === selected)?.label || selected;
+        const correctLabel = correctOption.label;
+        await fetchExplanation(
+          q.question,
+          userLabel,
+          correctLabel,
+          'Cognitive Reasoning',
+          q.options.map(o => o.label),
+        );
+        return; // Don't advance yet — wait for user to dismiss explanation
+      }
+    }
+
     setSelected(null);
 
     if (current < questions.length - 1) {
       setCurrent(current + 1);
     } else {
-      let cognitiveScore = computeCognitiveScore(newAnswers);
-      const learningStyle = newAnswers.learningStyle || 'long-term-gradual';
-      const studyHoursPerDay = parseInt(newAnswers.studyHoursPerDay) || 2;
-      const studyDaysPerWeek = parseInt(newAnswers.studyDaysPerWeek) || 4;
-      const examPrepWeek = parseInt(newAnswers.examPrepWeek) || 2;
-      const preferredQuestionFormat = newAnswers.preferredQuestionFormat || 'mcq';
-      const p: {
-        learningStyle: string;
-        studyHoursPerDay: number;
-        studyDaysPerWeek: number;
-        examPrepWeek: number;
-        preferredQuestionFormat: string;
-        cognitiveScore: number;
-        readinessScore: number;
-        personalityTraits: string[];
-        learnerTypes: string[];
-      } = {
-        learningStyle,
-        studyHoursPerDay,
-        studyDaysPerWeek,
-        examPrepWeek,
-        preferredQuestionFormat,
-        cognitiveScore,
-        readinessScore: 0,
-        personalityTraits: [],
-        learnerTypes: [],
-      };
-      p.readinessScore = computeReadinessScore({
-        studyDaysPerWeek: p.studyDaysPerWeek,
-        studyHoursPerDay: p.studyHoursPerDay,
-        examPrepWeek: p.examPrepWeek,
-        cognitiveScore: p.cognitiveScore,
+      await finishQuiz(newAnswers);
+    }
+  };
+
+  const handleSkipExplanation = () => {
+    setShowExplanation(false);
+    setExplanation(null);
+    setWasWrong(false);
+    setSelected(null);
+    if (current < questions.length - 1) {
+      setCurrent(current + 1);
+    } else {
+      finishQuiz({ ...answers, [q.key]: selected });
+    }
+  };
+
+  const finishQuiz = async (newAnswers: Record<string, string>) => {
+    let cognitiveScore = computeCognitiveScore(newAnswers);
+    const learningStyle = newAnswers.learningStyle || 'long-term-gradual';
+    const studyHoursPerDay = parseInt(newAnswers.studyHoursPerDay) || 2;
+    const studyDaysPerWeek = parseInt(newAnswers.studyDaysPerWeek) || 4;
+    const examPrepWeek = parseInt(newAnswers.examPrepWeek) || 2;
+    const preferredQuestionFormat = newAnswers.preferredQuestionFormat || 'mcq';
+    const p: any = {
+      learningStyle, studyHoursPerDay, studyDaysPerWeek, examPrepWeek, preferredQuestionFormat,
+      cognitiveScore, readinessScore: 0, personalityTraits: [], learnerTypes: [],
+    };
+    p.readinessScore = computeReadinessScore({
+      studyDaysPerWeek: p.studyDaysPerWeek, studyHoursPerDay: p.studyHoursPerDay,
+      examPrepWeek: p.examPrepWeek, cognitiveScore: p.cognitiveScore,
+    });
+    if (DEMO_MODE) {
+      p.cognitiveScore = Math.max(p.cognitiveScore, 70);
+      p.readinessScore = Math.max(p.readinessScore, 72);
+    }
+    setPersonaLoading(true);
+    try {
+      const res = await fetch('/api/generate-persona-traits', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          learningStyle: p.learningStyle, studyHoursPerDay: p.studyHoursPerDay,
+          studyDaysPerWeek: p.studyDaysPerWeek, examPrepWeek: p.examPrepWeek,
+          preferredQuestionFormat: p.preferredQuestionFormat, cognitiveScore: p.cognitiveScore,
+          readinessScore: p.readinessScore, rawAnswers: newAnswers,
+        }),
       });
-      if (DEMO_MODE) {
-        p.cognitiveScore = Math.max(p.cognitiveScore, 70);
-        p.readinessScore = Math.max(p.readinessScore, 72);
-      }
-      setPersonaLoading(true);
-      try {
-        const res = await fetch('/api/generate-persona-traits', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            learningStyle: p.learningStyle,
-            studyHoursPerDay: p.studyHoursPerDay,
-            studyDaysPerWeek: p.studyDaysPerWeek,
-            examPrepWeek: p.examPrepWeek,
-            preferredQuestionFormat: p.preferredQuestionFormat,
-            cognitiveScore: p.cognitiveScore,
-            readinessScore: p.readinessScore,
-            rawAnswers: newAnswers,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (Array.isArray(data.personalityTraits) && data.personalityTraits.length > 0) {
-          p.personalityTraits = data.personalityTraits;
-        } else {
-          p.personalityTraits = getFallbackTraits(p);
-        }
-        if (Array.isArray(data.learnerTypes) && data.learnerTypes.length > 0) {
-          p.learnerTypes = data.learnerTypes.filter((id: string) => getLearnerType(id));
-        } else {
-          p.learnerTypes = getFallbackLearnerTypes(p);
-        }
-      } catch {
-        p.personalityTraits = getFallbackTraits(p);
-        p.learnerTypes = getFallbackLearnerTypes(p);
-      } finally {
-        setPersonaLoading(false);
-      }
-      setPersona(p);
-      setShowResults(true);
-      if (auth.currentUser && p) {
-        const toSave: LearnerPersona = {
-          learningStyle: p.learningStyle as LearnerPersona['learningStyle'],
-          studyHoursPerDay: p.studyHoursPerDay,
-          studyDaysPerWeek: p.studyDaysPerWeek,
-          examPrepWeek: p.examPrepWeek,
-          preferredQuestionFormat: p.preferredQuestionFormat as LearnerPersona['preferredQuestionFormat'],
-          cognitiveScore: p.cognitiveScore,
-          readinessScore: p.readinessScore,
-          personalityTraits: p.personalityTraits,
-          learnerTypes: p.learnerTypes,
-        };
-        savePersona(auth.currentUser.uid, toSave).catch((e) => console.error('Failed to save persona', e));
-      }
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.personalityTraits) && data.personalityTraits.length > 0) {
+        p.personalityTraits = data.personalityTraits;
+      } else { p.personalityTraits = getFallbackTraits(p); }
+      if (Array.isArray(data.learnerTypes) && data.learnerTypes.length > 0) {
+        p.learnerTypes = data.learnerTypes.filter((id: string) => getLearnerType(id));
+      } else { p.learnerTypes = getFallbackLearnerTypes(p); }
+    } catch {
+      p.personalityTraits = getFallbackTraits(p);
+      p.learnerTypes = getFallbackLearnerTypes(p);
+    } finally { setPersonaLoading(false); }
+    setPersona(p);
+    setShowResults(true);
+    if (auth.currentUser && p) {
+      const toSave: LearnerPersona = {
+        learningStyle: p.learningStyle as LearnerPersona['learningStyle'],
+        studyHoursPerDay: p.studyHoursPerDay, studyDaysPerWeek: p.studyDaysPerWeek,
+        examPrepWeek: p.examPrepWeek,
+        preferredQuestionFormat: p.preferredQuestionFormat as LearnerPersona['preferredQuestionFormat'],
+        cognitiveScore: p.cognitiveScore, readinessScore: p.readinessScore,
+        personalityTraits: p.personalityTraits, learnerTypes: p.learnerTypes,
+      };
+      savePersona(auth.currentUser.uid, toSave).catch((e) => console.error('Failed to save persona', e));
     }
   };
 
@@ -314,16 +358,82 @@ export default function QuizPage() {
           <h2 className="text-xl font-bold text-white mb-6">{q.question}</h2>
           <div className="space-y-3">
             {q.options.map((opt) => (
-              <button key={opt.value} onClick={() => setSelected(opt.value)}
-                className={`w-full text-left p-4 rounded-xl border transition-all ${selected === opt.value ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/30' : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'}`}>
-                <span className={`text-sm ${selected === opt.value ? 'text-blue-200 font-medium' : 'text-slate-300'}`}>{opt.label}</span>
+              <button key={opt.value} onClick={() => { if (!showExplanation) setSelected(opt.value); }}
+                className={`w-full text-left p-4 rounded-xl border transition-all ${
+                  showExplanation && wasWrong
+                    ? opt.correct
+                      ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
+                      : selected === opt.value
+                        ? 'bg-red-500/20 border-red-500/50 ring-1 ring-red-500/30'
+                        : 'bg-white/5 border-white/10 opacity-50'
+                    : selected === opt.value
+                      ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/30'
+                      : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${
+                    showExplanation && wasWrong
+                      ? opt.correct ? 'text-green-300 font-bold' : selected === opt.value ? 'text-red-300 line-through' : 'text-slate-500'
+                      : selected === opt.value ? 'text-blue-200 font-medium' : 'text-slate-300'
+                  }`}>{opt.label}</span>
+                  {showExplanation && wasWrong && opt.correct && <span className="text-green-400 text-xs font-bold">✓ Correct</span>}
+                  {showExplanation && wasWrong && selected === opt.value && !opt.correct && <span className="text-red-400 text-xs font-bold">✗ Your answer</span>}
+                </div>
               </button>
             ))}
           </div>
-          <button onClick={handleNext} disabled={!selected}
-            className={`w-full mt-6 py-3.5 rounded-xl font-semibold transition-all ${selected ? 'bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25' : 'bg-white/5 text-slate-500 cursor-not-allowed'}`}>
-            {current === questions.length - 1 ? 'View My Learner DNA →' : 'Next Question →'}
-          </button>
+
+          {/* AI Explanation Panel */}
+          {showExplanation && explanation && (
+            <div className="mt-6 space-y-3 animate-in fade-in">
+              <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🤖</span>
+                  <p className="text-xs font-bold text-violet-300">Guardian AI Explains</p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-bold text-red-400 mb-1">❌ Why your answer was wrong:</p>
+                    <p className="text-sm text-slate-300">{explanation.whyWrong}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-green-400 mb-1">✅ Why the correct answer is right:</p>
+                    <p className="text-sm text-slate-300">{explanation.whyCorrect}</p>
+                  </div>
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <p className="text-xs text-blue-300">💡 <span className="font-bold">Quick Tip:</span> {explanation.quickTip}</p>
+                  </div>
+                  {explanation.similarMistake && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                      <p className="text-xs text-amber-300">⚠️ <span className="font-bold">Watch out:</span> {explanation.similarMistake}</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-green-400 italic">{explanation.confidenceBoost}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {explanationLoading && (
+            <div className="mt-6 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+              <div className="flex items-center gap-3">
+                <svg className="animate-spin h-5 w-5 text-violet-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                <p className="text-sm text-violet-300">Guardian AI is analyzing your answer...</p>
+              </div>
+            </div>
+          )}
+
+          {showExplanation ? (
+            <button onClick={handleSkipExplanation}
+              className="w-full mt-6 py-3.5 rounded-xl font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25">
+              {current === questions.length - 1 ? 'View My Learner DNA →' : 'Got it! Next Question →'}
+            </button>
+          ) : (
+            <button onClick={handleNext} disabled={!selected}
+              className={`w-full mt-6 py-3.5 rounded-xl font-semibold transition-all ${selected ? 'bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25' : 'bg-white/5 text-slate-500 cursor-not-allowed'}`}>
+              {current === questions.length - 1 ? 'View My Learner DNA →' : 'Next Question →'}
+            </button>
+          )}
         </div>
       </div>
     </div>

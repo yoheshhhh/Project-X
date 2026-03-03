@@ -60,13 +60,22 @@ export default function CoursePage() {
                 </h1>
                 <p className="text-slate-500 text-sm mt-1.5">Browse and manage your courses</p>
               </div>
-              <a
-                href="#"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 border border-indigo-500/20 transition-all duration-200"
-              >
-                <span className="text-lg">📚</span>
-                Course Catalogue
-              </a>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold shadow-sm border border-slate-200 transition-all duration-200"
+                >
+                  <span className="text-lg">←</span>
+                  Dashboard
+                </Link>
+                <a
+                  href="#"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 border border-indigo-500/20 transition-all duration-200"
+                >
+                  <span className="text-lg">📚</span>
+                  Course Catalogue
+                </a>
+              </div>
             </div>
 
             {/* Toolbar */}

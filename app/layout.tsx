@@ -1,16 +1,17 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import AITutor from '@/components/AITutor';
 
-export const metadata: Metadata = {
-  title: 'NTUlearn — AI-Powered Adaptive Learning',
-  description: 'An AI-powered adaptive learning platform that understands who you are and evolves with you.',
+export const metadata = {
+  title: 'NTUlearn - AI-Powered Adaptive Learning',
+  description: 'Personalized learning platform powered by AI for NTU students',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50">
+      <body>
         {children}
+        <AITutor />
       </body>
     </html>
   );

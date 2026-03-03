@@ -24,29 +24,31 @@ const mockData = {
   imLostClicks: 3,
 };
 
-function BarChart({ data, maxVal, color }) {
-  const max = maxVal || Math.max(...data.map(d => d.value));
+function BarChart({ data, maxVal, color }: { data: { label: string; value: number }[]; maxVal?: number; color?: string }) {
+  const max = maxVal || Math.max(...data.map(d => d.value), 1);
+  const BAR_MAX_PX = 120;
   return (
-    <div className="flex items-end gap-2 h-32">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <span className="text-xs text-slate-400">{d.value}</span>
-          <div className="w-full rounded-t-md transition-all duration-500" style={{ height: `${(d.value / max) * 100}%`, backgroundColor: color || '#3b82f6', minHeight: d.value > 0 ? '4px' : '0' }} />
-          <span className="text-xs text-slate-500">{d.label}</span>
-        </div>
-      ))}
+    <div className="flex items-end gap-2">
+      {data.map((d, i) => {
+        const barH = max > 0 ? Math.round((d.value / max) * BAR_MAX_PX) : 0;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-xs text-slate-400">{d.value}</span>
+            <div className="w-full flex items-end" style={{ height: `${BAR_MAX_PX}px` }}>
+              <div className="w-full rounded-t-md transition-all duration-500" style={{ height: `${Math.max(barH, d.value > 0 ? 4 : 0)}px`, backgroundColor: color || '#3b82f6' }} />
+            </div>
+            <span className="text-xs text-slate-500 truncate w-full text-center">{d.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default function DashboardPage() {
   const [data] = useState(mockData);
-  const [burnout, setBurnout] = useState(data.burnout);
+  const [burnout, setBurnout] = useState<any>(data.burnout);
   const [burnoutLoading, setBurnoutLoading] = useState(false);
-  const [practiceLoading, setPracticeLoading] = useState(false);
-  const [practiceQuestions, setPracticeQuestions] = useState([]);
-  const [practiceAnswers, setPracticeAnswers] = useState({});
-  const [showPractice, setShowPractice] = useState(false);
 
   const checkBurnout = async () => {
     setBurnoutLoading(true);
@@ -60,20 +62,6 @@ export default function DashboardPage() {
       setBurnout({ riskLevel: b.riskLevel || 'low', riskScore: b.riskScore || 0, signals: b.signals || [], breakdown: b.breakdown || [], recommendation: b.recommendation || 'Your study patterns look healthy!', schedule: b.schedule || null, weeklyTip: b.weeklyTip || '', mentalHealthResources: b.mentalHealthResources || [] });
     } catch { setBurnout({ riskLevel: 'moderate', riskScore: 45, signals: ['Late night studying', 'Declining scores'], breakdown: [], recommendation: 'Consider taking a break.', schedule: null, weeklyTip: 'Try sleeping before midnight tonight.', mentalHealthResources: [] }); }
     setBurnoutLoading(false);
-  };
-
-  const generatePractice = async () => {
-    setPracticeLoading(true);
-    setShowPractice(true);
-    try {
-      const res = await fetch('/api/practice', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moduleName: 'SC1003 Intro to Computational Thinking', weakTopics: ['Control Structures', 'Loops', 'Conditionals'], preferredFormat: 'mcq', questionCount: 5 }),
-      });
-      const result = await res.json();
-      setPracticeQuestions(result.questions || result || []);
-    } catch { setPracticeQuestions([]); }
-    setPracticeLoading(false);
   };
 
   const totalHours = data.weeklyHours.reduce((sum, d) => sum + d.hours, 0);
@@ -165,44 +153,18 @@ export default function DashboardPage() {
               <BarChart data={data.quizScores.map(d => ({ label: d.quiz, value: d.score }))} maxVal={100} color="#8b5cf6" />
             </div>
 
-            {/* AI Practice Paper */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">📝 AI Practice Paper Generator</h3>
-                <button onClick={generatePractice} disabled={practiceLoading} className="bg-violet-500 hover:bg-violet-600 disabled:bg-violet-500/50 text-white text-sm px-4 py-2 rounded-lg transition-all">
-                  {practiceLoading ? '⏳ Generating...' : '✨ Generate Practice Paper'}
+            {/* AI Practice Paper — now links to full page */}
+            <div className="bg-gradient-to-r from-violet-500/10 to-blue-500/10 border border-violet-500/20 rounded-2xl p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">📝 AI Practice Paper Generator</h3>
+                  <p className="text-sm text-slate-400 mt-1">Full mock exams with MCQ + short answer — AI-generated from your course topics</p>
+                </div>
+                <button onClick={() => window.location.href = '/practice-paper'}
+                  className="bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-violet-500/25 flex items-center gap-2">
+                  ✨ Generate Practice Paper
                 </button>
               </div>
-              {showPractice && (
-                <div className="space-y-4">
-                  {practiceLoading ? (
-                    <div className="text-center py-8">
-                      <svg className="animate-spin h-8 w-8 mx-auto text-violet-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                      <p className="text-sm text-violet-300">AI is generating personalized questions based on your weak topics...</p>
-                    </div>
-                  ) : practiceQuestions.length > 0 ? (
-                    practiceQuestions.map((q, qi) => (
-                      <div key={qi} className="p-4 bg-white/5 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${q.difficulty === 'easy' ? 'bg-green-500/20 text-green-300' : q.difficulty === 'hard' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300'}`}>{q.difficulty}</span>
-                          <span className="text-xs text-slate-500">{q.topic}</span>
-                        </div>
-                        <p className="text-sm text-slate-200 mb-3">{qi + 1}. {q.question}</p>
-                        {q.options && (
-                          <div className="space-y-2">
-                            {q.options.map((opt, oi) => (
-                              <button key={oi} onClick={() => setPracticeAnswers({ ...practiceAnswers, [qi]: oi })}
-                                className={`w-full text-left p-3 rounded-lg border text-sm transition-all ${practiceAnswers[qi] === oi ? 'bg-blue-500/20 border-blue-500/50 text-blue-200' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}>
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : <p className="text-sm text-slate-400 text-center py-4">No questions generated. Try again.</p>}
-                </div>
-              )}
             </div>
           </div>
 
@@ -264,7 +226,7 @@ export default function DashboardPage() {
                     <div className="mb-3">
                       <p className="text-xs text-slate-400 font-medium mb-2">📊 Signal Breakdown</p>
                       <div className="space-y-2">
-                        {burnout.breakdown.map((b, i) => (
+                        {burnout.breakdown.map((b: any, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white/5">
                             <div className="flex items-center gap-2">
                               <span className={`w-2 h-2 rounded-full ${b.status === 'healthy' ? 'bg-green-400' : b.status === 'warning' ? 'bg-amber-400' : 'bg-red-400'}`} />
@@ -312,7 +274,7 @@ export default function DashboardPage() {
                     <div className="mt-3">
                       <p className="text-xs text-slate-400 font-medium mb-2">🫂 NTU Support Resources</p>
                       <div className="space-y-2">
-                        {burnout.mentalHealthResources.map((r, i) => (
+                        {burnout.mentalHealthResources.map((r: any, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white/5">
                             <div>
                               <p className="text-xs text-slate-300">{r.name}</p>

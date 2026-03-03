@@ -1,0 +1,214 @@
+{
+  "students": {
+    "student_1": {
+      "dna": {
+        "learningStyle": "short-term-intensive",
+        "preferredQuestionFormat": "mcq",
+        "cognitiveScore": 8,
+        "personalityTraits": ["focused-learner", "deadline-driven", "analytical", "practical-mindset"]
+      },
+      "history": {
+        "quiz1": 7,
+        "quiz2": 8,
+        "quiz3": 6,
+        "quiz4": 9,
+        "quiz5": 8
+      },
+      "moduleData": {
+        "topic1": {
+          "name": "Introduction to Software Security",
+          "completed": true,
+          "timeTakenMinutes": 40,
+          "difficulty": "easy",
+          "studyMethod": "flashcards",
+          "notesUsed": ["lecture_slides", "cheatsheet"],
+          "practiceTests": 1,
+          "flashcardsCovered": 15,
+          "memoryRetentionRate": 0.85,
+          "mistakesMade": 2,
+          "confidence": 0.9,
+          "flashcardDifficulty": "easy",
+          "hint": "Focus on key definitions and common vulnerabilities."
+        },
+        "topic2": {
+          "name": "Threat Modeling",
+          "completed": true,
+          "timeTakenMinutes": 80,
+          "difficulty": "medium",
+          "studyMethod": "worked_examples",
+          "notesUsed": ["textbook", "case_study_notes"],
+          "practiceTests": 2,
+          "flashcardsCovered": 12,
+          "memoryRetentionRate": 0.75,
+          "mistakesMade": 4,
+          "confidence": 0.7,
+          "flashcardDifficulty": "medium",
+          "hint": "Pay attention to STRIDE and DREAD frameworks."
+        },
+        "topic3": {
+          "name": "Secure Coding Practices",
+          "completed": true,
+          "timeTakenMinutes": 75,
+          "difficulty": "medium",
+          "studyMethod": "practice-tests",
+          "notesUsed": ["lecture_notes", "coding_examples"],
+          "practiceTests": 3,
+          "flashcardsCovered": 18,
+          "memoryRetentionRate": 0.8,
+          "mistakesMade": 3,
+          "confidence": 0.8,
+          "flashcardDifficulty": "medium",
+          "hint": "Focus on common vulnerabilities like buffer overflows and SQL injections."
+        },
+        "topic4": {
+          "name": "Authentication & Authorization",
+          "completed": false,
+          "timeTakenMinutes": 0,
+          "difficulty": "hard",
+          "studyMethod": "flashcards",
+          "notesUsed": [],
+          "practiceTests": 0,
+          "flashcardsCovered": 0,
+          "memoryRetentionRate": 0.0,
+          "mistakesMade": 0,
+          "confidence": 0.0,
+          "flashcardDifficulty": "hard",
+          "hint": "Review OAuth, JWT, and session management carefully."
+        },
+        "topic5": {
+          "name": "Cryptography Basics",
+          "completed": true,
+          "timeTakenMinutes": 90,
+          "difficulty": "medium",
+          "studyMethod": "worked_examples",
+          "notesUsed": ["textbook", "lecture_slides"],
+          "practiceTests": 3,
+          "flashcardsCovered": 20,
+          "memoryRetentionRate": 0.78,
+          "mistakesMade": 5,
+          "confidence": 0.75,
+          "flashcardDifficulty": "medium",
+          "hint": "Practice symmetric vs asymmetric encryption and hashing algorithms."
+        },
+        "topic6": {
+          "name": "Input Validation & Sanitization",
+          "completed": false,
+          "timeTakenMinutes": 0,
+          "difficulty": "medium",
+          "studyMethod": "flashcards",
+          "notesUsed": [],
+          "practiceTests": 0,
+          "flashcardsCovered": 0,
+          "memoryRetentionRate": 0.0,
+          "mistakesMade": 0,
+          "confidence": 0.0,
+          "flashcardDifficulty": "medium",
+          "hint": "Focus on preventing SQL injection, XSS, and buffer overflows."
+        },
+        "topic7": {
+          "name": "Web Security Threats",
+          "completed": true,
+          "timeTakenMinutes": 65,
+          "difficulty": "medium",
+          "studyMethod": "practice-tests",
+          "notesUsed": ["examples", "lecture_notes"],
+          "practiceTests": 2,
+          "flashcardsCovered": 15,
+          "memoryRetentionRate": 0.72,
+          "mistakesMade": 3,
+          "confidence": 0.78,
+          "flashcardDifficulty": "medium",
+          "hint": "Focus on OWASP top 10 vulnerabilities."
+        },
+        "topic8": {
+          "name": "Mobile App Security",
+          "completed": false,
+          "timeTakenMinutes": 0,
+          "difficulty": "hard",
+          "studyMethod": "memorization",
+          "notesUsed": [],
+          "practiceTests": 0,
+          "flashcardsCovered": 0,
+          "memoryRetentionRate": 0.0,
+          "mistakesMade": 0,
+          "confidence": 0.0,
+          "flashcardDifficulty": "hard",
+          "hint": "Review Android and iOS app security guidelines."
+        },
+        "topic9": {
+          "name": "Security Testing & Audits",
+          "completed": true,
+          "timeTakenMinutes": 85,
+          "difficulty": "medium",
+          "studyMethod": "worked_examples",
+          "notesUsed": ["case_study_notes", "textbook"],
+          "practiceTests": 3,
+          "flashcardsCovered": 18,
+          "memoryRetentionRate": 0.77,
+          "mistakesMade": 4,
+          "confidence": 0.76,
+          "flashcardDifficulty": "medium",
+          "hint": "Focus on penetration testing steps and common audit checklists."
+        },
+        "topic10": {
+          "name": "Incident Response & Recovery",
+          "completed": true,
+          "timeTakenMinutes": 55,
+          "difficulty": "easy",
+          "studyMethod": "flashcards",
+          "notesUsed": ["cheatsheet", "lecture_slides"],
+          "practiceTests": 1,
+          "flashcardsCovered": 14,
+          "memoryRetentionRate": 0.83,
+          "mistakesMade": 1,
+          "confidence": 0.85,
+          "flashcardDifficulty": "easy",
+          "hint": "Review incident response steps and recovery prioritization."
+        }
+      },
+      "studyPatterns": {
+        "peakFocusTime": "10AM-1PM",
+        "preferredSessionLengthMinutes": 45,
+        "reviewFrequency": "daily",
+        "bestDayOfWeek": "Wednesday",
+        "worstDayOfWeek": "Friday",
+        "averageTimePerSessionMinutes": 55
+      },
+      "sessionLogs": [
+        {"date": "2026-02-25", "topicsStudied": ["Introduction to Software Security", "Threat Modeling"], "timeSpent": 120, "method": "flashcards+worked_examples"},
+        {"date": "2026-02-26", "topicsStudied": ["Secure Coding Practices", "Cryptography Basics"], "timeSpent": 165, "method": "practice-tests+worked_examples"},
+        {"date": "2026-02-27", "topicsStudied": ["Web Security Threats"], "timeSpent": 65, "method": "practice-tests"},
+        {"date": "2026-02-28", "topicsStudied": ["Security Testing & Audits", "Incident Response & Recovery"], "timeSpent": 140, "method": "worked_examples+flashcards"}
+      ],
+      "topicInsights": {
+        "easiestTopics": ["Introduction to Software Security", "Incident Response & Recovery"],
+        "hardestTopics": ["Authentication & Authorization", "Mobile App Security", "Input Validation & Sanitization"],
+        "mostTimeConsuming": ["Threat Modeling", "Cryptography Basics", "Secure Coding Practices"],
+        "leastTimeConsuming": ["Introduction to Software Security", "Incident Response & Recovery"],
+        "preferredMethodsByTopic": {
+          "Introduction to Software Security": "flashcards",
+          "Threat Modeling": "worked_examples",
+          "Secure Coding Practices": "practice-tests",
+          "Authentication & Authorization": "flashcards",
+          "Cryptography Basics": "worked_examples",
+          "Input Validation & Sanitization": "flashcards",
+          "Web Security Threats": "practice-tests",
+          "Mobile App Security": "memorization",
+          "Security Testing & Audits": "worked_examples",
+          "Incident Response & Recovery": "flashcards"
+        }
+      },
+      "predictions": {
+        "nextQuizScore": 8.8,
+        "topicsToFocusNext": ["Authentication & Authorization", "Mobile App Security", "Input Validation & Sanitization"],
+        "recommendedMethodNext": {
+          "Authentication & Authorization": "flashcards + practice-tests",
+          "Mobile App Security": "memorization + flashcards",
+          "Input Validation & Sanitization": "flashcards + worked_examples"
+        },
+        "expectedImprovement": "+1.1",
+        "recommendedSequenceOfTopics": ["Authentication & Authorization", "Input Validation & Sanitization", "Mobile App Security", "Cryptography Basics", "Secure Coding Practices"]
+      }
+    }
+  }
+}
