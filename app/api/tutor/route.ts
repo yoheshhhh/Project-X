@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
 import { complete as openAIComplete } from '@/lib/openai-ai';
+import { retrieveRelevantChunks } from '@/lib/rag';
 
 const log = logger.child('API:AITutor');
 
@@ -24,7 +25,6 @@ function analyzePerformance(history: number[]): { prediction: number | null; sta
     return { prediction: null, status: 'Not enough data' };
   }
 
-  // Linear regression (same as Pranati's sklearn LinearRegression)
   const n = history.length;
   const xMean = (n - 1) / 2;
   const yMean = history.reduce((a, b) => a + b, 0) / n;
@@ -47,10 +47,7 @@ function analyzePerformance(history: number[]): { prediction: number | null; sta
   return { prediction, status };
 }
 
-/* ── get_student_data (Firestore → JSON fallback) ─────────────────────── */
-
 async function getStudentData(studentId = 'student_1'): Promise<Record<string, any> | null> {
-  // Try Firestore first (same as Pranati's db.collection("students").document(student_id))
   try {
     const { adminDb } = await import('@/lib/firebase-admin');
     if (adminDb) {
@@ -64,7 +61,6 @@ async function getStudentData(studentId = 'student_1'): Promise<Record<string, a
     log.debug('Firestore unavailable', { reason: err.message });
   }
 
-  // Fallback: local JSON (Pranati's student_data.json)
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
@@ -81,8 +77,6 @@ async function getStudentData(studentId = 'student_1'): Promise<Record<string, a
   return null;
 }
 
-/* ── OpenAI (replaces Gemini) ──────────────────────────────────────────── */
-
 async function callTutorAI(prompt: string): Promise<string | null> {
   try {
     return await openAIComplete(prompt);
@@ -91,8 +85,6 @@ async function callTutorAI(prompt: string): Promise<string | null> {
     return null;
   }
 }
-
-/* ── POST /api/tutor — exact mirror of Pranati's get_ai_tutor_advice ── */
 
 export async function POST(request: Request) {
   try {
@@ -105,84 +97,66 @@ export async function POST(request: Request) {
 
     log.info('Tutor query', { question: questionText.slice(0, 80), hasImage });
 
-    // ── Step 1: get_student_data (same as Pranati) ──
+    // ── Step 1: Get student data ──
     const studentData = await getStudentData('student_1');
     if (!studentData) {
       return NextResponse.json({ answer: 'No module data found for student.' });
     }
 
-    // ── Step 2: Extract data EXACTLY like Pranati's code ──
-    // topics = student_data.get("moduleData", {})
+    // ── Step 2: Extract fields ──
     const topics: Record<string, any> = studentData.moduleData || {};
-
-    // recommended_seq = student_data.get("predictions", {}).get("recommendedSequenceOfTopics", [])
     const recommendedSeq: string[] = studentData.predictions?.recommendedSequenceOfTopics || [];
-
-    // history = student_data.get("history", {})
     const history: Record<string, number> = studentData.history || {};
-
-    // dna = student_data.get("dna", {})
     const dna: Record<string, any> = studentData.dna || {};
 
-    // memory_retention = {t: topics[t].get('memoryRetentionRate') for t in topics}
     const memoryRetention: Record<string, number> = {};
+    const mistakes: Record<string, number> = {};
+    const confidence: Record<string, number> = {};
+    const flashcardDiff: Record<string, string> = {};
+    const hints: Record<string, string> = {};
+
     for (const t of Object.keys(topics)) {
       memoryRetention[t] = topics[t].memoryRetentionRate;
-    }
-
-    // mistakes = {t: topics[t].get('mistakesMade') for t in topics}
-    const mistakes: Record<string, number> = {};
-    for (const t of Object.keys(topics)) {
       mistakes[t] = topics[t].mistakesMade;
-    }
-
-    // confidence = {t: topics[t].get('confidence') for t in topics}
-    const confidence: Record<string, number> = {};
-    for (const t of Object.keys(topics)) {
       confidence[t] = topics[t].confidence;
-    }
-
-    // flashcard_diff = {t: topics[t].get('flashcardDifficulty') for t in topics}
-    const flashcardDiff: Record<string, string> = {};
-    for (const t of Object.keys(topics)) {
       flashcardDiff[t] = topics[t].flashcardDifficulty;
-    }
-
-    // hints = {t: topics[t].get('hint') for t in topics}
-    const hints: Record<string, string> = {};
-    for (const t of Object.keys(topics)) {
       hints[t] = topics[t].hint;
     }
 
-    // history_scores = list(history.values())
     const historyScores = Object.values(history);
-
-    // pred, status = analyze_performance(history_scores)
     const { prediction: pred, status } = analyzePerformance(historyScores);
 
-    // ── Step 3: Build EXACT same prompt as Pranati ──
+    // ── Step 2.5: RAG — retrieve relevant course content ──
+    const relevantChunks = await retrieveRelevantChunks(question, 4);
+    const courseContext = relevantChunks.length > 0
+      ? `\nRelevant course material from lectures:\n${relevantChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}`
+      : '';
+
+    // ── Step 3: Build prompt ──
     const prompt = `
-You are Guardian AI, an academic tutor.
+You are Guardian AI, an academic tutor for a Software Security module (SC3010).
 
 Student learning style: ${dna.learningStyle || 'unknown'}
 Personality traits: ${JSON.stringify(dna.personalityTraits || [])}
-Topics studied: ${JSON.stringify(Object.keys(topics))}
-Memory retention per topic: ${JSON.stringify(memoryRetention)}
-Mistakes made per topic: ${JSON.stringify(mistakes)}
-Confidence per topic: ${JSON.stringify(confidence)}
-Flashcard difficulty: ${JSON.stringify(flashcardDiff)}
-Hints for AI tutor: ${JSON.stringify(hints)}
+Peak focus time: ${studentData.studyPatterns?.peakFocusTime || 'unknown'}
+
+Performance per topic:
+${Object.entries(topics).map(([k, v]: any) =>
+  `- ${v.name}: confidence ${Math.round((v.confidence || 0) * 100)}%, mistakes: ${v.mistakesMade || 0}, retention: ${Math.round((v.memoryRetentionRate || 0) * 100)}%, completed: ${v.completed}`
+).join('\n')}
+
 Quiz score history: ${JSON.stringify(historyScores)}
 Predicted next score: ${pred}, Trend: ${status}
-Recommended sequence of topics: ${JSON.stringify(recommendedSeq)}
+Topics to focus next: ${JSON.stringify(studentData.predictions?.topicsToFocusNext || [])}
+${courseContext}
 
 Student question: ${questionText}${hasImage ? ' (The student attached an image — read it and address any doubt or question shown.)' : ''}
 
-Task:
-1. Ask 2-3 personalized questions, prioritizing weakest topics first.
-2. Suggest an activity for each topic (flashcards, hints, practice exercises).
-3. Explain why this sequence and activity is recommended.
-4. Make guidance actionable, data-driven, and concise.
+Based on the student's performance data AND the relevant course material above:
+1. Answer their question directly, referencing specific lecture content where relevant.
+2. Connect your answer to their personal weak areas if applicable.
+3. Suggest a specific next action (flashcard, practice test, or worked example).
+4. Keep it concise, specific, and encouraging.
 `;
 
     // ── Step 4: Call OpenAI (vision when image attached) ──
@@ -218,7 +192,7 @@ Task:
       return NextResponse.json({ answer: response });
     }
 
-    // Fallback if Gemini is completely down
+    // Fallback
     return NextResponse.json({
       answer: `Tutor is resting 😴 AI is unavailable right now. Quick summary from your data: your weakest topics are ${Object.entries(confidence).sort((a, b) => (a[1] as number) - (b[1] as number)).slice(0, 3).map(([k, v]) => `${topics[k]?.name || k} (${Math.round((v as number) * 100)}%)`).join(', ')}. Focus on those first!`,
     });
