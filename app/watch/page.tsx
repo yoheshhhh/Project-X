@@ -11,7 +11,7 @@ import { SegmentLearnSummary } from '@/components/SegmentLearnSummary';
 import { demoModule } from '@/data/demoModule';
 import { progressService } from '@/lib/progress';
 import { clearStudentDataCache } from '@/lib/useStudentData';
-import { auth, onAuthStateChanged } from '@/lib/firebase';
+import { auth, onAuthStateChanged, logStudySession } from '@/lib/firebase';
 import type { Flashcard } from '@/lib/ai-help';
 import type { Segment, ModuleProgress, QuizQuestion } from '@/types/learning';
 
@@ -65,6 +65,8 @@ function WatchPageContent() {
 
   const inFlightRef = useRef<Record<string, Promise<QuizQuestion[]> | null>>({});
   const lastFailRef = useRef<Record<string, number>>({});
+  const sessionStartRef = useRef(Date.now());
+  const sessionLoggedRef = useRef(false);
 
   const fetchQuizOnce = useCallback(async (segmentIndex: number, segmentSlides: string): Promise<QuizQuestion[]> => {
     const key = String(segmentIndex);
@@ -110,6 +112,26 @@ function WatchPageContent() {
     });
     return () => unsub();
   }, []);
+
+  // Log study session on page leave / visibility hidden / unmount
+  useEffect(() => {
+    const logSession = () => {
+      if (sessionLoggedRef.current) return;
+      const durationMinutes = (Date.now() - sessionStartRef.current) / 60000;
+      if (durationMinutes < 0.5) return;
+      sessionLoggedRef.current = true;
+      logStudySession(userId, moduleId, Math.round(durationMinutes * 10) / 10).catch(() => {});
+      clearStudentDataCache();
+    };
+    const onVisChange = () => {
+      if (document.visibilityState === 'hidden') logSession();
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      logSession();
+    };
+  }, [userId, moduleId]);
 
   const loadProgress = useCallback(async () => {
     const p = await progressService.getProgress(userId, moduleId);

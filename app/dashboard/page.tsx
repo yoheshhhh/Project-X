@@ -33,12 +33,21 @@ export default function DashboardPage() {
   // Client-side phase detection for adaptive greeting
   const { phase } = detectPhase(studentData);
 
+  const totalHours = data.weeklyHours.reduce((sum: number, d: any) => sum + d.hours, 0);
+
   const checkBurnout = async () => {
     setBurnoutLoading(true);
     try {
       const res = await fetch('/api/burnout', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionsThisWeek: 12, avgDurationMinutes: 120, avgSessionHour: 22, scoresTrend: [90, 85, 70], streakDays: 14, totalHoursThisWeek: 28 }),
+        body: JSON.stringify({
+          sessionsThisWeek: data.weeklyHours.filter((d: any) => d.hours > 0).length,
+          avgDurationMinutes: studentData.avgSessionMinutes || 60,
+          avgSessionHour: new Date().getHours(),
+          scoresTrend: data.quizScores.slice(-5).map((q: any) => q.score),
+          streakDays: data.student.streak || 0,
+          totalHoursThisWeek: totalHours,
+        }),
       });
       const result = await res.json();
       const b = result || {};
@@ -47,7 +56,6 @@ export default function DashboardPage() {
     setBurnoutLoading(false);
   };
 
-  const totalHours = data.weeklyHours.reduce((sum, d) => sum + d.hours, 0);
   const overallProgress = Math.round(data.modules.reduce((sum, m) => sum + m.progress, 0) / data.modules.length);
 
   // Phase-adaptive greeting

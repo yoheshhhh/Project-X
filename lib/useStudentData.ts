@@ -93,9 +93,11 @@ export function detectPhase(data: any) {
 
 // ---- Module-level cache ----
 let _cache: { studentData: any; dashboardData: any; isRealData: boolean; uid: string } | null = null;
+/** Monotonic version counter — incremented by clearStudentDataCache to force re-fetch */
+let _cacheVersion = 0;
 
 /** Call after quiz completion to force fresh Firestore fetch on next page load */
-export function clearStudentDataCache() { _cache = null; }
+export function clearStudentDataCache() { _cache = null; _cacheVersion++; }
 
 /** Helper: compute dashboard module shape from real Firestore moduleProgress doc */
 function buildDashModule(m: any) {
@@ -118,22 +120,106 @@ function buildDashModule(m: any) {
   };
 }
 
+/** Read localStorage progress and build real data from it (works for demo user without Firebase Auth) */
+function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('lams_progress');
+    if (!raw) return null;
+    const all: Record<string, any> = JSON.parse(raw);
+    const entries = Object.values(all).filter((m: any) => m.quizScores && Object.keys(m.quizScores).length > 0);
+    if (entries.length === 0) return null;
+
+    // Build quiz history
+    const quizHistory: any[] = [];
+    entries.forEach((m: any) => {
+      const scores: Record<string, number> = m.quizScores || {};
+      Object.entries(scores).forEach(([seg, score]) => {
+        quizHistory.push({ topic: m.moduleTopic || m.moduleName || m.moduleId || 'Unknown', score, week: 1 });
+      });
+    });
+
+    const { weakTopics, strongTopics } = computeWeakStrong(quizHistory);
+
+    // Build modules for dashboard
+    const dashModules = entries.map(buildDashModule);
+
+    const quizScoresList = quizHistory.map((q, i) => ({
+      quiz: `${q.topic.slice(0, 15)} S${i + 1}`,
+      score: q.score,
+    }));
+
+    const avgScore = quizScoresList.length > 0
+      ? Math.round(quizScoresList.reduce((a, q) => a + q.score, 0) / quizScoresList.length)
+      : 0;
+
+    const studentData = {
+      ...MOCK_STUDENT_DATA,
+      modules: entries.map((m: any) => ({ name: m.moduleTopic || m.moduleName || 'Module', progress: buildDashModule(m).progress })),
+      quizHistory,
+      weakTopics,
+      strongTopics,
+    };
+
+    const dashboardData = {
+      ...MOCK_DASHBOARD_DATA,
+      modules: dashModules,
+      quizScores: quizScoresList.slice(0, 10),
+      peerComparison: { you: avgScore, cohortAvg: 65, top10: 92 },
+      practiceQuestionsAttempted: quizHistory.length,
+    };
+
+    return { studentData, dashboardData };
+  } catch {
+    return null;
+  }
+}
+
 export function useStudentData() {
   const [studentData, setStudentData] = useState<any>(_cache?.studentData ?? MOCK_STUDENT_DATA);
   const [dashboardData, setDashboardData] = useState<any>(_cache?.dashboardData ?? MOCK_DASHBOARD_DATA);
   const [loading, setLoading] = useState(!_cache);
   const [isRealData, setIsRealData] = useState(_cache?.isRealData ?? false);
   const [uid, setUid] = useState<string | null>(_cache?.uid ?? null);
+  const [version, setVersion] = useState(_cacheVersion);
+
+  // Re-check when cache is invalidated (e.g. after quiz completion)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (_cacheVersion !== version) {
+        setVersion(_cacheVersion);
+        _cache = null;
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [version]);
 
   useEffect(() => {
-    // If cached, skip Firestore fetch entirely
-    if (_cache) return;
+    // If cached, skip fetch entirely
+    if (_cache) {
+      setStudentData(_cache.studentData);
+      setDashboardData(_cache.dashboardData);
+      setIsRealData(_cache.isRealData);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (cancelled) return;
-      if (!user) { setLoading(false); return; }
+      if (!user) {
+        // No Firebase Auth — try localStorage for demo user
+        const local = buildDataFromLocalStorage();
+        if (local) {
+          setStudentData(local.studentData);
+          setDashboardData(local.dashboardData);
+          setIsRealData(true);
+          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: 'local' };
+        }
+        setLoading(false);
+        return;
+      }
       setUid(user.uid);
 
       try {
@@ -146,8 +232,18 @@ export function useStudentData() {
 
         if (cancelled) return;
 
-        // Need at least 1 quiz score to use real data
-        if (quizScores.length < 1) { setLoading(false); return; }
+        // Need at least 1 quiz score to use real Firestore data; fall back to localStorage
+        if (quizScores.length < 1) {
+          const local = buildDataFromLocalStorage();
+          if (local) {
+            setStudentData(local.studentData);
+            setDashboardData(local.dashboardData);
+            setIsRealData(true);
+            _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid };
+          }
+          setLoading(false);
+          return;
+        }
 
         setIsRealData(true);
 
@@ -257,13 +353,20 @@ export function useStudentData() {
         setDashboardData(realDashboardData);
         _cache = { studentData: realStudentData, dashboardData: realDashboardData, isRealData: true, uid: user.uid };
       } catch (err) {
-        console.error('useStudentData: failed to fetch Firestore data', err);
+        console.error('useStudentData: failed to fetch Firestore data, trying localStorage', err);
+        const local = buildDataFromLocalStorage();
+        if (local && !cancelled) {
+          setStudentData(local.studentData);
+          setDashboardData(local.dashboardData);
+          setIsRealData(true);
+          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid };
+        }
       }
       if (!cancelled) setLoading(false);
     });
 
     return () => { cancelled = true; unsub(); };
-  }, []);
+  }, [version]);
 
   return { studentData, dashboardData, loading, isRealData, uid };
 }

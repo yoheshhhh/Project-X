@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile, readdir } from 'fs/promises';
 import path from 'path';
-import { PDFParse } from 'pdf-parse';
 import { demoModule } from '@/data/demoModule';
 import { logger } from '@/lib/logger';
 
@@ -76,6 +75,7 @@ export async function GET(request: NextRequest) {
 
     try {
       const buffer = await readFile(pdfPath);
+      const { PDFParse } = await import('pdf-parse');
       const parser = new PDFParse({ data: new Uint8Array(buffer) });
       const textResult = await parser.getText();
       await parser.destroy();
