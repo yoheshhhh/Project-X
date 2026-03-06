@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [burnout, setBurnout] = useState<any>(data.burnout);
   const [burnoutLoading, setBurnoutLoading] = useState(false);
   const [burnoutChecked, setBurnoutChecked] = useState(false);
+  const [peerCompare, setPeerCompare] = useState(() => typeof window !== 'undefined' && localStorage.getItem('peerCompare') === 'true');
 
   // Sync burnout when dashboardData changes
   useEffect(() => {
@@ -303,7 +304,27 @@ export default function DashboardPage() {
             {/* Quiz Scores Chart */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">📈 Quiz Score Trend</h3>
-              <BarChart data={data.quizScores.map(d => ({ label: d.quiz, value: d.score }))} maxVal={100} color="#8b5cf6" />
+              {(() => {
+                const scores = data.quizScores.map((d: any) => d.score);
+                const labels = data.quizScores.map((d: any) => d.quiz);
+                const W = 600, H = 200, PAD_L = 35, PAD_R = 15, PAD_T = 25, PAD_B = 50;
+                const chartW = W - PAD_L - PAD_R, chartH = H - PAD_T - PAD_B;
+                const step = scores.length > 1 ? chartW / (scores.length - 1) : 0;
+                const pts = scores.map((s: number, i: number) => ({ x: PAD_L + i * step, y: PAD_T + (1 - s / 100) * chartH }));
+                const line = pts.map((p: any) => `${p.x},${p.y}`).join(' ');
+                const area = `${pts[0]?.x ?? PAD_L},${PAD_T + chartH} ${line} ${pts[pts.length - 1]?.x ?? PAD_L},${PAD_T + chartH}`;
+                return (
+                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: '200px' }}>
+                    {[0, 25, 50, 75, 100].map(v => { const y = PAD_T + (1 - v / 100) * chartH; return <g key={v}><line x1={PAD_L} x2={W - PAD_R} y1={y} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="1" /><text x={PAD_L - 6} y={y + 4} textAnchor="end" fill="#64748b" fontSize="10">{v}</text></g>; })}
+                    <polygon points={area} fill="url(#quizGrad2)" />
+                    <polyline points={line} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                    {pts.map((p: any, i: number) => <circle key={i} cx={p.x} cy={p.y} r="4" fill="#8b5cf6" stroke="#0f172a" strokeWidth="2" />)}
+                    {pts.map((p: any, i: number) => <text key={`s${i}`} x={p.x} y={p.y - 10} textAnchor="middle" fill={scores[i] >= 80 ? '#22c55e' : scores[i] >= 70 ? '#f59e0b' : '#ef4444'} fontSize="11" fontWeight="bold">{scores[i]}%</text>)}
+                    {pts.map((p: any, i: number) => <text key={`l${i}`} x={p.x} y={PAD_T + chartH + 16} textAnchor="middle" fill="#64748b" fontSize="10">{labels[i]}</text>)}
+                    <defs><linearGradient id="quizGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" /><stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.02" /></linearGradient></defs>
+                  </svg>
+                );
+              })()}
               {predictedScore.predicted > 0 && (
                 <div className="mt-3 flex items-center gap-2 text-sm">
                   <span className="text-slate-400">Predicted next score:</span>
@@ -348,11 +369,6 @@ export default function DashboardPage() {
                   {weeklyReport.concerns.map((c: string, i: number) => (
                     <p key={i} className="text-xs text-slate-300 flex items-start gap-1.5 mb-1"><span className="text-amber-400 mt-0.5">!</span>{c}</p>
                   ))}
-                </div>
-              )}
-              {weeklyReport.goalSuggestion && (
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                  <p className="text-xs text-blue-300"><span className="font-medium">AI Goal Suggestion:</span> {weeklyReport.goalSuggestion}</p>
                 </div>
               )}
             </div>
@@ -539,30 +555,43 @@ export default function DashboardPage() {
 
             {/* Peer Comparison */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-white mb-4">👥 Anonymous Peer Comparison</h3>
-              {data.peerComparison.cohortAvg == null || data.peerComparison.top10 == null ? (
-                <div className="text-center py-4">
-                  <p className="text-sm text-slate-400">Not enough cohort data yet.</p>
-                  <p className="text-xs text-slate-500 mt-1">Peer comparison will appear once more students complete quizzes.</p>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">👥 Anonymous Peer Comparison</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{peerCompare ? 'On' : 'Off'}</span>
+                  <button
+                    onClick={() => { const next = !peerCompare; setPeerCompare(next); localStorage.setItem('peerCompare', String(next)); }}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${peerCompare ? 'bg-blue-500' : 'bg-white/15'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${peerCompare ? 'translate-x-5' : ''}`} />
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {[
-                    { label: 'Your Score', value: data.peerComparison.you, color: '#3b82f6' },
-                    { label: 'Cohort Average', value: data.peerComparison.cohortAvg, color: '#6b7280' },
-                    { label: 'Top 10%', value: data.peerComparison.top10, color: '#22c55e' },
-                  ].map((item) => (
-                    <div key={item.label}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-slate-300">{item.label}</span>
-                        <span className="font-bold text-white">{item.value}%</span>
+              </div>
+              {peerCompare && (
+                data.peerComparison.cohortAvg == null || data.peerComparison.top10 == null ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-slate-400">Not enough cohort data yet.</p>
+                    <p className="text-xs text-slate-500 mt-1">Peer comparison will appear once more students complete quizzes.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {[
+                      { label: 'Your Score', value: data.peerComparison.you, color: '#3b82f6' },
+                      { label: 'Cohort Average', value: data.peerComparison.cohortAvg, color: '#6b7280' },
+                      { label: 'Top 10%', value: data.peerComparison.top10, color: '#22c55e' },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-slate-300">{item.label}</span>
+                          <span className="font-bold text-white">{item.value}%</span>
+                        </div>
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
+                        </div>
                       </div>
-                      <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
               <p className="text-xs text-slate-500 mt-3">📊 All comparisons are anonymous. No individual data is shared.</p>
             </div>
@@ -666,8 +695,35 @@ export default function DashboardPage() {
 
             {/* Streak */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-white mb-3">🔥 Study Streak</h3>
+              <h3 className="text-lg font-bold text-white mb-3">Study Streak</h3>
               <div className="text-center">
+                <div className="relative inline-block mb-2" style={{ transform: `scale(${Math.min(2, 0.7 + data.student.streak * 0.1)})`, transformOrigin: 'bottom center' }}>
+                  <svg width="64" height="72" viewBox="0 0 64 72" className="mx-auto">
+                    <defs>
+                      <linearGradient id="fireGrad1" x1="0.5" y1="1" x2="0.5" y2="0">
+                        <stop offset="0%" stopColor="#f59e0b" />
+                        <stop offset="50%" stopColor="#ef4444" />
+                        <stop offset="100%" stopColor="#fbbf24" />
+                      </linearGradient>
+                      <linearGradient id="fireGrad2" x1="0.5" y1="1" x2="0.5" y2="0">
+                        <stop offset="0%" stopColor="#fbbf24" />
+                        <stop offset="100%" stopColor="#fef08a" />
+                      </linearGradient>
+                    </defs>
+                    {/* Outer flame */}
+                    <path d="M32 4 C32 4, 8 28, 8 46 C8 60, 18 68, 32 68 C46 68, 56 60, 56 46 C56 28, 32 4, 32 4Z" fill="url(#fireGrad1)">
+                      <animateTransform attributeName="transform" type="scale" values="1 1;0.97 1.03;1 1;1.03 0.97;1 1" dur="0.8s" repeatCount="indefinite" additive="sum" />
+                    </path>
+                    {/* Inner flame */}
+                    <path d="M32 28 C32 28, 18 42, 18 52 C18 60, 24 64, 32 64 C40 64, 46 60, 46 52 C46 42, 32 28, 32 28Z" fill="url(#fireGrad2)">
+                      <animateTransform attributeName="transform" type="scale" values="1 1;1.04 0.96;1 1;0.96 1.04;1 1" dur="0.6s" repeatCount="indefinite" additive="sum" />
+                    </path>
+                    {/* Glow */}
+                    <ellipse cx="32" cy="68" rx="18" ry="3" fill="#f59e0b" opacity="0.2">
+                      <animate attributeName="opacity" values="0.2;0.35;0.2" dur="0.8s" repeatCount="indefinite" />
+                    </ellipse>
+                  </svg>
+                </div>
                 <div className="text-5xl font-extrabold text-amber-400 mb-2">{data.student.streak}</div>
                 <p className="text-sm text-slate-400">consecutive days</p>
               </div>
@@ -678,24 +734,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* AI Features Used */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-white mb-3">🤖 AI Features Used</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">🃏 Flashcards Generated</span>
-                  <span className="text-sm font-bold text-white">{data.flashcardsGenerated}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">📝 Practice Qs Attempted</span>
-                  <span className="text-sm font-bold text-white">{data.practiceQuestionsAttempted}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">😵 "I am Lost" Clicks</span>
-                  <span className="text-sm font-bold text-white">{data.imLostClicks}</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

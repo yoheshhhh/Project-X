@@ -11,18 +11,18 @@ const MOCK_STUDENT_DATA: any = {
   modules: [{ name: 'SC1003 M1: Intro to Python', progress: 100 },{ name: 'SC1003 M2: Control Structures', progress: 67 },{ name: 'SC1003 M3: Functions', progress: 30 }],
   weeklyHoursHistory: [8, 12, 15, 10, 14, 16, 13, 11],
   quizHistory: [
-    { topic: 'Variables', score: 92, week: 1 },{ topic: 'Variables', score: 88, week: 2 },{ topic: 'Variables', score: 55, week: 5 },
-    { topic: 'Data Types', score: 85, week: 1 },{ topic: 'Data Types', score: 90, week: 3 },{ topic: 'Data Types', score: 88, week: 6 },
-    { topic: 'If-Else', score: 80, week: 2 },{ topic: 'If-Else', score: 92, week: 4 },{ topic: 'If-Else', score: 58, week: 6 },
-    { topic: 'Loops Intro', score: 75, week: 3 },{ topic: 'Loops Intro', score: 78, week: 5 },
-    { topic: 'For Loops', score: 85, week: 3 },{ topic: 'For Loops', score: 90, week: 5 },{ topic: 'For Loops', score: 62, week: 7 },
-    { topic: 'While Loops', score: 70, week: 4 },{ topic: 'While Loops', score: 68, week: 6 },{ topic: 'While Loops', score: 65, week: 8 },
-    { topic: 'Nested Loops', score: 65, week: 4 },{ topic: 'Nested Loops', score: 60, week: 6 },{ topic: 'Nested Loops', score: 58, week: 8 },
-    { topic: 'Functions Intro', score: 80, week: 5 },{ topic: 'Functions Intro', score: 82, week: 7 },
-    { topic: 'Scope', score: 60, week: 5 },{ topic: 'Scope', score: 55, week: 7 },{ topic: 'Scope', score: 52, week: 8 },
-    { topic: 'Return Values', score: 75, week: 6 },{ topic: 'Return Values', score: 70, week: 8 },
-    { topic: 'Recursion', score: 45, week: 7 },{ topic: 'Recursion', score: 48, week: 8 },
-    { topic: 'List Operations', score: 82, week: 7 },{ topic: 'List Operations', score: 50, week: 8 },
+    { topic: 'Variables', score: 92, week: 1, moduleId: 'SC1003' },{ topic: 'Variables', score: 88, week: 2, moduleId: 'SC1003' },{ topic: 'Variables', score: 55, week: 5, moduleId: 'SC1003' },
+    { topic: 'Data Types', score: 85, week: 1, moduleId: 'SC1003' },{ topic: 'Data Types', score: 90, week: 3, moduleId: 'SC1003' },{ topic: 'Data Types', score: 88, week: 6, moduleId: 'SC1003' },
+    { topic: 'If-Else', score: 80, week: 2, moduleId: 'SC1003' },{ topic: 'If-Else', score: 92, week: 4, moduleId: 'SC1003' },{ topic: 'If-Else', score: 58, week: 6, moduleId: 'SC1003' },
+    { topic: 'Loops Intro', score: 75, week: 3, moduleId: 'SC1003' },{ topic: 'Loops Intro', score: 78, week: 5, moduleId: 'SC1003' },
+    { topic: 'For Loops', score: 85, week: 3, moduleId: 'SC1003' },{ topic: 'For Loops', score: 90, week: 5, moduleId: 'SC1003' },{ topic: 'For Loops', score: 62, week: 7, moduleId: 'SC1003' },
+    { topic: 'While Loops', score: 70, week: 4, moduleId: 'SC1003' },{ topic: 'While Loops', score: 68, week: 6, moduleId: 'SC1003' },{ topic: 'While Loops', score: 65, week: 8, moduleId: 'SC1003' },
+    { topic: 'Nested Loops', score: 65, week: 4, moduleId: 'SC1003' },{ topic: 'Nested Loops', score: 60, week: 6, moduleId: 'SC1003' },{ topic: 'Nested Loops', score: 58, week: 8, moduleId: 'SC1003' },
+    { topic: 'Functions Intro', score: 80, week: 5, moduleId: 'SC1003' },{ topic: 'Functions Intro', score: 82, week: 7, moduleId: 'SC1003' },
+    { topic: 'Scope', score: 60, week: 5, moduleId: 'SC1003' },{ topic: 'Scope', score: 55, week: 7, moduleId: 'SC1003' },{ topic: 'Scope', score: 52, week: 8, moduleId: 'SC1003' },
+    { topic: 'Return Values', score: 75, week: 6, moduleId: 'SC1003' },{ topic: 'Return Values', score: 70, week: 8, moduleId: 'SC1003' },
+    { topic: 'Recursion', score: 45, week: 7, moduleId: 'SC1003' },{ topic: 'Recursion', score: 48, week: 8, moduleId: 'SC1003' },
+    { topic: 'List Operations', score: 82, week: 7, moduleId: 'SC1003' },{ topic: 'List Operations', score: 50, week: 8, moduleId: 'SC1003' },
   ],
   loginFrequency: [3, 5, 6, 4, 5, 6, 5, 4], avgSessionMinutes: 95,
   flashcardsReviewed: 42, lostClicks: 5, lastActive: '2 hours ago', daysSinceLogin: 0,
@@ -71,7 +71,7 @@ const MOCK_DASHBOARD_DATA: any = {
   imLostClicks: 3,
 };
 
-function computeWeakStrong(quizHistory: any[]) {
+export function computeWeakStrong(quizHistory: any[]) {
   const ta = Object.entries(
     quizHistory.reduce((a: any, q: any) => { if (!a[q.topic]) a[q.topic] = []; a[q.topic].push(q.score); return a; }, {})
   ).map(([t, s]: [string, any]) => ({ topic: t, avg: Math.round(s.reduce((a: number, b: number) => a + b, 0) / s.length) }));
@@ -200,6 +200,7 @@ function buildDataFromLocalStorage(cohortStats?: { cohortAvg: number | null; top
           topic: m.moduleTopic || m.moduleName || m.moduleId || 'Unknown',
           score,
           week: hasTimestamp ? Math.max(1, Math.ceil((daysSince as number) / 7)) : 1,
+          moduleId: m.moduleId || 'unknown',
         };
         // Only set daysSince when we have a real timestamp — otherwise let algorithm use week-based fallback
         if (hasTimestamp) entry.daysSince = Math.round((daysSince as number) * 10) / 10;
@@ -339,6 +340,7 @@ export function useStudentData() {
             score: q.score ?? 0,
             week: Math.max(1, Math.ceil(daysSince / 7)),
             daysSince: Math.round(daysSince * 10) / 10,
+            moduleId: q.moduleId || 'unknown',
           };
         });
 

@@ -59,11 +59,11 @@ export function computeRetentionRates(quizHistory: QuizEntry[], weeksActive: num
 
   return Object.values(latest).map((q) => {
     // Use daysSince directly if available, otherwise fall back to week-level
-    const daysSinceStudied = q.daysSince !== undefined
+    const daysSinceStudied = Math.max(0, q.daysSince !== undefined
       ? q.daysSince
-      : Math.max(0, weeksActive - q.week) * 7;
+      : (weeksActive - q.week) * 7);
     const weeksSince = daysSinceStudied / 7;
-    const retention = Math.max(5, Math.round((q.score / 100) * 100 * Math.exp(-0.3 * weeksSince)));
+    const retention = Math.min(100, Math.max(5, Math.round(q.score * Math.exp(-0.3 * weeksSince))));
     const reviewInDays = Math.max(1, Math.round(7 * Math.exp(-0.1 * (100 - q.score))));
 
     let urgency: RetentionRate['urgency'];

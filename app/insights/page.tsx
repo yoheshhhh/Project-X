@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { useStudentData } from '@/lib/useStudentData';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useStudentData, computeWeakStrong } from '@/lib/useStudentData';
 import { authFetch } from '@/lib/api-client';
 
 const pc: any = { 'onboarding':'#3b82f6','building-momentum':'#10b981','steady-progress':'#22c55e','accelerating':'#8b5cf6','plateauing':'#f59e0b','declining':'#ef4444','inactive':'#6b7280','at-risk':'#dc2626' };
@@ -416,17 +416,26 @@ export default function InsightsPage() {
   const [tab, setTab] = useState('timeline');
   const [expNudge, setExpNudge] = useState<number | null>(null);
   const [expInsight, setExpInsight] = useState<number | null>(null);
-  const [selectedModule, setSelectedModule] = useState('SC1003');
+  const [selectedModule, setSelectedModule] = useState('ALL');
   const [showSignals, setShowSignals] = useState(false);
 
   const AVAILABLE_MODULES = [
-    { code: 'SC1003', name: 'Introduction to Computational Thinking (Python)' },
-    { code: 'SC3010', name: 'Computer Security' },
-    { code: 'SC2207', name: 'Introduction to Databases' },
-    { code: 'SC4012', name: 'Software Security' },
-    { code: 'SC3099', name: 'Capstone Project' },
+    { code: 'ALL', name: 'All Modules' },
     { code: 'CC0006', name: 'Sustainability: Soc, Econ, Env' },
+    { code: 'SC2207', name: 'Introduction to Databases' },
+    { code: 'SC3010', name: 'Computer Security' },
+    { code: 'SC3099', name: 'Capstone Project' },
+    { code: 'SC4012', name: 'Software Security' },
   ];
+
+  // Filter studentData by selected module
+  const filteredStudentData = useMemo(() => {
+    if (selectedModule === 'ALL') return studentData;
+    const filteredQuiz = (studentData.quizHistory || []).filter((q: any) => q.moduleId === selectedModule);
+    if (filteredQuiz.length === 0) return studentData;
+    const { weakTopics, strongTopics } = computeWeakStrong(filteredQuiz);
+    return { ...studentData, quizHistory: filteredQuiz, weakTopics, strongTopics };
+  }, [studentData, selectedModule]);
 
   // Shared weakness analysis (used by both Careless and RepeatedFailures tabs)
   const [weaknessData, setWeaknessData] = useState<any>(null);
@@ -434,13 +443,20 @@ export default function InsightsPage() {
   const fetchWeakness = () => {
     if (weaknessFetched.current) return;
     weaknessFetched.current = true;
-    authFetch('/api/weakness-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizHistory: studentData.quizHistory }) })
+    authFetch('/api/weakness-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizHistory: filteredStudentData.quizHistory }) })
       .then(r => r.json()).then(setWeaknessData).catch(console.error);
   };
 
   const didFetch = useRef(false);
-  const fetch_ = async () => { setLoading(true); try { const r = await authFetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData) }); setIns(await r.json()); } catch (e) { console.error(e); } setLoading(false); };
+  const fetch_ = async () => { setLoading(true); try { const r = await authFetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(filteredStudentData) }); setIns(await r.json()); } catch (e) { console.error(e); } setLoading(false); };
   useEffect(() => { if (!dataLoading && !didFetch.current) { didFetch.current = true; fetch_(); } }, [dataLoading]);
+
+  // Re-fetch when module changes (skip initial load handled above)
+  useEffect(() => {
+    if (dataLoading || !didFetch.current) return;
+    setIns(null); setWeaknessData(null); weaknessFetched.current = false;
+    fetch_();
+  }, [selectedModule]);
 
   const phase = ins?.learningStateAnalysis;
   const color = pc[phase?.currentPhase] || '#3b82f6';
@@ -468,7 +484,7 @@ export default function InsightsPage() {
       </div>
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-start justify-between mb-6">
-          <div><h2 className="text-2xl font-bold text-white mb-1">AI Learning Intelligence 🧠</h2><p className="text-sm text-slate-400"><span className="text-blue-300 font-medium">{selectedModule}</span> · {studentData.quizHistory.length} scores, {studentData.weeksActive} weeks of data</p></div>
+          <div><h2 className="text-2xl font-bold text-white mb-1">AI Learning Intelligence 🧠</h2><p className="text-sm text-slate-400"><span className="text-blue-300 font-medium">{selectedModule === 'ALL' ? 'All Modules' : selectedModule}</span> · {filteredStudentData.quizHistory.length} scores, {filteredStudentData.weeksActive} weeks of data</p></div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <select
@@ -613,13 +629,13 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'predict' && <PredictionTab scores={studentData.quizHistory.map((q: any) => q.score)} topics={studentData.quizHistory} />}
-            {tab === 'modules' && <ModuleDiveTab studentData={studentData} />}
+            {tab === 'predict' && <PredictionTab scores={filteredStudentData.quizHistory.map((q: any) => q.score)} topics={filteredStudentData.quizHistory} />}
+            {tab === 'modules' && <ModuleDiveTab studentData={filteredStudentData} />}
             {tab === 'careless' && <CarelessWeaknessTab data={weaknessData} />}
             {tab === 'failures' && <RepeatedFailuresTab data={weaknessData} />}
-            {tab === 'flashcards' && <FlashcardsTab studentData={studentData} />}
-            {tab === 'studyplan' && <StudyPlanTab studentData={studentData} />}
-            {tab === 'agents' && <AgentVisualizerTab studentData={studentData} />}
+            {tab === 'flashcards' && <FlashcardsTab studentData={filteredStudentData} />}
+            {tab === 'studyplan' && <StudyPlanTab studentData={filteredStudentData} />}
+            {tab === 'agents' && <AgentVisualizerTab studentData={filteredStudentData} />}
 
             {tab === 'nudges' && <div className="space-y-4">
               {/* Action Cards */}

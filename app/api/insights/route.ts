@@ -62,9 +62,14 @@ class LearningStateAnalyzer {
 
   computeForgettingCurve() {
     const now = this.d.weeksActive;
-    return (this.d.quizHistory || []).map((q: any) => {
-      const weeksSince = now - q.week;
-      const retentionRate = Math.max(20, Math.round(q.score * Math.exp(-0.3 * weeksSince)));
+    // Group by topic, keep most recent entry (highest week)
+    const latest: Record<string, any> = {};
+    for (const q of (this.d.quizHistory || [])) {
+      if (!latest[q.topic] || q.week > latest[q.topic].week) latest[q.topic] = q;
+    }
+    return Object.values(latest).map((q: any) => {
+      const weeksSince = Math.max(0, now - q.week);
+      const retentionRate = Math.min(100, Math.max(20, Math.round(q.score * Math.exp(-0.3 * weeksSince))));
       const daysUntilReview = Math.max(1, Math.round(7 * Math.exp(-0.1 * (100 - q.score))));
       const urgency = retentionRate < 50 ? 'urgent' : retentionRate < 70 ? 'soon' : 'ok';
       return { topic: q.topic, originalScore: q.score, weeksSinceStudied: weeksSince, estimatedRetention: retentionRate, reviewInDays: daysUntilReview, urgency };
