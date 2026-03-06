@@ -244,6 +244,116 @@ export async function logStudySession(uid: string, moduleId: string, durationMin
   });
 }
 
+// ---- Study Goals ----
+
+export async function saveStudyGoal(uid: string, goal: {
+  goalType: 'score' | 'hours' | 'streak' | 'topic-mastery';
+  targetValue: number;
+  targetDate?: string;
+  topic?: string;
+  description: string;
+}) {
+  const goalRef = doc(collection(db, 'goals'));
+  await setDoc(goalRef, {
+    uid,
+    ...goal,
+    progress: 0,
+    status: 'active',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return goalRef.id;
+}
+
+export async function getStudyGoals(uid: string) {
+  // Simple query without orderBy to avoid needing a composite index
+  const q = query(collection(db, 'goals'), where('uid', '==', uid));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateStudyGoal(uid: string, goalId: string, data: Record<string, any>) {
+  const docRef = doc(db, 'goals', goalId);
+  await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function deleteStudyGoal(goalId: string) {
+  const { deleteDoc } = await import('firebase/firestore');
+  const docRef = doc(db, 'goals', goalId);
+  await deleteDoc(docRef);
+}
+
+// ---- Study Profile (for collaborative matching) ----
+
+export async function saveStudyProfile(uid: string, profile: {
+  displayName: string;
+  weakTopics: string[];
+  strongTopics: string[];
+  studyStyle: string;
+  lookingForHelp: string[];
+  canHelpWith: string[];
+  optIn: boolean;
+}) {
+  const docRef = doc(db, 'studyProfiles', uid);
+  await setDoc(docRef, {
+    uid,
+    ...profile,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function getStudyProfile(uid: string) {
+  const docRef = doc(db, 'studyProfiles', uid);
+  const snap = await getDoc(docRef);
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function findStudyMatches(uid: string, weakTopics: string[]) {
+  // Find users who are strong in topics this user is weak in
+  const q = query(
+    collection(db, 'studyProfiles'),
+    where('optIn', '==', true),
+  );
+  const snap = await getDocs(q);
+  const matches = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as any)
+    .filter((p: any) => p.uid !== uid)
+    .map((p: any) => {
+      // Compute match score: how many of your weak topics are their strong topics
+      const helpScore = weakTopics.filter(t => (p.strongTopics || []).includes(t)).length;
+      const complementScore = (p.weakTopics || []).filter((t: string) => weakTopics.includes(t)).length;
+      return { ...p, matchScore: helpScore * 2 - complementScore, canHelpWith: weakTopics.filter(t => (p.strongTopics || []).includes(t)) };
+    })
+    .filter((p: any) => p.matchScore > 0)
+    .sort((a: any, b: any) => b.matchScore - a.matchScore);
+
+  return matches;
+}
+
+// ---- Adaptive Quiz Difficulty ----
+
+export async function getAdaptiveDifficulty(uid: string, moduleId: string) {
+  const docRef = doc(db, 'adaptiveDifficulty', `${uid}_${moduleId}`);
+  const snap = await getDoc(docRef);
+  return snap.exists() ? snap.data() : null;
+}
+
+export async function saveAdaptiveDifficulty(uid: string, moduleId: string, data: {
+  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  consecutiveHighScores: number;
+  consecutiveLowScores: number;
+  lastScore: number;
+  adjustmentHistory: { from: string; to: string; reason: string; timestamp: number }[];
+}) {
+  const docRef = doc(db, 'adaptiveDifficulty', `${uid}_${moduleId}`);
+  await setDoc(docRef, {
+    uid,
+    moduleId,
+    ...data,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
 // ---- Types ----
 
 export interface LearnerPersona {

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useStudentData } from '@/lib/useStudentData';
 
 type Message = { role: 'user' | 'ai'; text: string; image?: string };
 type ChatSize = 'compact' | 'expanded' | 'fullscreen';
@@ -15,8 +16,10 @@ const QUICK_PROMPTS = [
   'My weak topics?',
   'Predict my score',
   'Exam in 1 hour — what to focus?',
-  'Study plan for today',
-  'My strong topics?',
+  'Create a study plan',
+  'Review schedule',
+  'My cognitive load?',
+  'Best time to study?',
 ];
 
 /* ── Simple Markdown Renderer ─────────────────────────────────────────── */
@@ -115,13 +118,14 @@ export default function AITutor() {
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<ChatSize>('compact');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', text: 'Hi! I\'m your Guardian AI Tutor 🛡️ I have access to your learning data — quiz scores, topic confidence, study patterns. Ask me anything!' },
+    { role: 'ai', text: 'Hi! I\'m your Guardian AI Tutor 🛡️ I have full access to your learning analytics — memory retention, cognitive load, optimal study times, and predicted scores. Ask me anything about your studies!' },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { studentData } = useStudentData();
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -141,18 +145,43 @@ export default function AITutor() {
     setLoading(true);
 
     try {
+      // Build learning context from student data for the AI coach
+      const learningContext = {
+        overallRetention: studentData?.overallRetention,
+        retentionRates: (studentData?.retentionRates || []).map((r: any) => ({
+          topic: r.topic, retention: r.retention, urgency: r.urgency, daysSinceStudied: r.daysSinceStudied,
+        })),
+        learningVelocity: studentData?.learningVelocity,
+        predictedScore: studentData?.predictedScore,
+        cognitiveLoad: studentData?.currentCognitiveLoad,
+        optimalStudyTime: (studentData?.optimalStudyTime || []).filter((t: any) => t.sessionCount > 0).map((t: any) => ({
+          label: t.label, avgScore: t.avgScore, performance: t.performance,
+        })),
+        weakTopics: studentData?.weakTopics || [],
+        strongTopics: studentData?.strongTopics || [],
+        weeklyReport: studentData?.weeklyReport ? {
+          avgScore: studentData.weeklyReport.avgScore,
+          improvement: studentData.weeklyReport.improvement,
+          quizzesCompleted: studentData.weeklyReport.quizzesCompleted,
+          goalSuggestion: studentData.weeklyReport.goalSuggestion,
+        } : null,
+        knowledgeMap: (studentData?.knowledgeMap || []).map((n: any) => ({
+          topic: n.topic, mastery: n.mastery, status: n.status,
+        })),
+      };
+
       const res = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: questionToSend, image: imageToSend }),
+        body: JSON.stringify({ question: questionToSend, image: imageToSend, learningContext }),
       });
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: data.answer || 'Sorry, couldn\'t process that. Try again!' }]);
+      const apiData = await res.json();
+      setMessages(prev => [...prev, { role: 'ai', text: apiData.answer || 'Sorry, couldn\'t process that. Try again!' }]);
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Connection issue — please try again.' }]);
     }
     setLoading(false);
-  }, [input, loading, attachedImage]);
+  }, [input, loading, attachedImage, studentData]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

@@ -187,3 +187,213 @@ export function getReviewDueTopics(retentionRates: RetentionRate[]): RetentionRa
     .filter((r) => r.retention < 60 || r.urgency === 'critical' || r.urgency === 'review-soon')
     .sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * NEW: Optimal Study Time, Cognitive Load, Weekly Report, Knowledge Graph
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface StudySession {
+  hour: number;       // 0-23
+  score: number;      // quiz score achieved after/during session
+  duration: number;   // minutes
+  timestamp?: number; // epoch ms
+}
+
+export interface TimeBlock {
+  label: string;
+  range: [number, number];
+  avgScore: number | null;
+  avgDuration: number | null;
+  sessionCount: number;
+  performance: 'peak' | 'good' | 'low' | 'no-data';
+}
+
+/**
+ * Analyze study sessions by time-of-day blocks to find peak performance windows.
+ */
+export function computeOptimalStudyTime(sessions: StudySession[]): TimeBlock[] {
+  const blocks: (TimeBlock & { _scores: number[]; _durations: number[] })[] = [
+    { label: 'Early Morning (6-9am)', range: [6, 9], avgScore: null, avgDuration: null, sessionCount: 0, performance: 'no-data', _scores: [], _durations: [] },
+    { label: 'Morning (9am-12pm)', range: [9, 12], avgScore: null, avgDuration: null, sessionCount: 0, performance: 'no-data', _scores: [], _durations: [] },
+    { label: 'Afternoon (12-5pm)', range: [12, 17], avgScore: null, avgDuration: null, sessionCount: 0, performance: 'no-data', _scores: [], _durations: [] },
+    { label: 'Evening (5-9pm)', range: [17, 21], avgScore: null, avgDuration: null, sessionCount: 0, performance: 'no-data', _scores: [], _durations: [] },
+    { label: 'Night (9pm-12am)', range: [21, 24], avgScore: null, avgDuration: null, sessionCount: 0, performance: 'no-data', _scores: [], _durations: [] },
+  ];
+
+  for (const s of sessions) {
+    const b = blocks.find(b => s.hour >= b.range[0] && s.hour < b.range[1]);
+    if (b) { b._scores.push(s.score); b._durations.push(s.duration); }
+  }
+
+  return blocks.map(b => {
+    const avgScore = b._scores.length > 0 ? Math.round(b._scores.reduce((a, s) => a + s, 0) / b._scores.length) : null;
+    const avgDuration = b._durations.length > 0 ? Math.round(b._durations.reduce((a, d) => a + d, 0) / b._durations.length) : null;
+    const performance: TimeBlock['performance'] = avgScore === null ? 'no-data' : avgScore >= 85 ? 'peak' : avgScore >= 70 ? 'good' : 'low';
+    return { label: b.label, range: b.range, avgScore, avgDuration, sessionCount: b._scores.length, performance };
+  });
+}
+
+export interface CognitiveLoadWeek {
+  week: string;
+  topicCount: number;
+  hardTopicCount: number;
+  avgScore: number;
+  cognitiveLoad: number;  // 0-100
+  level: 'optimal' | 'moderate' | 'overloaded';
+  topics: string[];
+}
+
+/**
+ * Cognitive load per week — how many topics studied and how many were hard (< 70%).
+ */
+export function computeCognitiveLoad(quizHistory: QuizEntry[]): CognitiveLoadWeek[] {
+  if (!quizHistory || quizHistory.length === 0) return [];
+
+  const weekTopics: Record<number, { topic: string; score: number }[]> = {};
+  for (const q of quizHistory) {
+    if (!weekTopics[q.week]) weekTopics[q.week] = [];
+    weekTopics[q.week].push({ topic: q.topic, score: q.score });
+  }
+
+  return Object.entries(weekTopics)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([week, topics]) => {
+      const hardTopics = topics.filter(t => t.score < 70).length;
+      const totalTopics = topics.length;
+      const avgScore = Math.round(topics.reduce((a, t) => a + t.score, 0) / topics.length);
+      const load = Math.min(100, Math.round((hardTopics / Math.max(totalTopics, 1)) * 60 + (totalTopics / 4) * 40));
+      const level: CognitiveLoadWeek['level'] = load > 70 ? 'overloaded' : load > 40 ? 'moderate' : 'optimal';
+      return { week: `W${week}`, topicCount: totalTopics, hardTopicCount: hardTopics, avgScore, cognitiveLoad: load, level, topics: topics.map(t => t.topic) };
+    });
+}
+
+/**
+ * Current cognitive load (most recent week).
+ */
+export function getCurrentCognitiveLoad(loadHistory: CognitiveLoadWeek[]): { load: number; level: string; trend: 'increasing' | 'stable' | 'decreasing' } {
+  if (!loadHistory || loadHistory.length === 0) return { load: 0, level: 'optimal', trend: 'stable' };
+  const current = loadHistory[loadHistory.length - 1];
+  let trend: 'increasing' | 'stable' | 'decreasing' = 'stable';
+  if (loadHistory.length >= 2) {
+    const prev = loadHistory[loadHistory.length - 2];
+    if (current.cognitiveLoad > prev.cognitiveLoad + 10) trend = 'increasing';
+    else if (current.cognitiveLoad < prev.cognitiveLoad - 10) trend = 'decreasing';
+  }
+  return { load: current.cognitiveLoad, level: current.level, trend };
+}
+
+export interface WeeklyReport {
+  weekNumber: number;
+  totalHours: number;
+  quizzesCompleted: number;
+  avgScore: number;
+  topicsStudied: string[];
+  improvement: number;        // score change vs previous week
+  retentionAlerts: number;    // topics needing review
+  cognitiveLoad: number;
+  highlights: string[];
+  concerns: string[];
+  goalSuggestion: string;
+}
+
+/**
+ * Generate a weekly progress report from data.
+ */
+export function computeWeeklyReport(
+  quizHistory: QuizEntry[],
+  weeklyHoursHistory: number[],
+  retentionRates: RetentionRate[],
+  cognitiveLoad: CognitiveLoadWeek[]
+): WeeklyReport {
+  if (!quizHistory || quizHistory.length === 0) {
+    return { weekNumber: 1, totalHours: 0, quizzesCompleted: 0, avgScore: 0, topicsStudied: [], improvement: 0, retentionAlerts: 0, cognitiveLoad: 0, highlights: ['Start your first quiz to see insights!'], concerns: [], goalSuggestion: 'Complete your first module segment' };
+  }
+
+  const maxWeek = Math.max(...quizHistory.map(q => q.week));
+  const thisWeekQuizzes = quizHistory.filter(q => q.week === maxWeek);
+  const prevWeekQuizzes = quizHistory.filter(q => q.week === maxWeek - 1);
+
+  const thisAvg = thisWeekQuizzes.length > 0
+    ? Math.round(thisWeekQuizzes.reduce((a, q) => a + q.score, 0) / thisWeekQuizzes.length)
+    : 0;
+  const prevAvg = prevWeekQuizzes.length > 0
+    ? Math.round(prevWeekQuizzes.reduce((a, q) => a + q.score, 0) / prevWeekQuizzes.length)
+    : thisAvg;
+
+  const retentionAlerts = retentionRates.filter(r => r.urgency === 'critical' || r.urgency === 'review-soon').length;
+  const currentLoad = cognitiveLoad.length > 0 ? cognitiveLoad[cognitiveLoad.length - 1].cognitiveLoad : 0;
+  const totalHours = weeklyHoursHistory.length > 0 ? weeklyHoursHistory[weeklyHoursHistory.length - 1] : 0;
+
+  const highlights: string[] = [];
+  const concerns: string[] = [];
+
+  if (thisAvg >= 80) highlights.push(`Strong quiz performance averaging ${thisAvg}%`);
+  if (thisAvg > prevAvg) highlights.push(`Scores improved by ${thisAvg - prevAvg}% vs last week`);
+  if (thisWeekQuizzes.length >= 3) highlights.push(`Completed ${thisWeekQuizzes.length} quizzes this week`);
+  if (highlights.length === 0) highlights.push(`Completed ${thisWeekQuizzes.length} quiz${thisWeekQuizzes.length !== 1 ? 'zes' : ''}`);
+
+  if (retentionAlerts > 0) concerns.push(`${retentionAlerts} topic${retentionAlerts > 1 ? 's' : ''} need review due to memory decay`);
+  if (thisAvg < prevAvg - 5) concerns.push(`Scores dropped by ${prevAvg - thisAvg}% from last week`);
+  if (currentLoad > 70) concerns.push('Cognitive load is high — consider spacing out difficult topics');
+
+  const weakTopics = retentionRates.filter(r => r.urgency === 'critical' || r.urgency === 'review-soon').map(r => r.topic);
+  const goalSuggestion = weakTopics.length > 0
+    ? `Review ${weakTopics[0]} to bring retention above 60%`
+    : thisAvg < 80
+    ? `Push average score above 80% by practicing weak areas`
+    : 'Maintain your streak and explore advanced topics';
+
+  return {
+    weekNumber: maxWeek,
+    totalHours,
+    quizzesCompleted: thisWeekQuizzes.length,
+    avgScore: thisAvg,
+    topicsStudied: Array.from(new Set(thisWeekQuizzes.map(q => q.topic))),
+    improvement: thisAvg - prevAvg,
+    retentionAlerts,
+    cognitiveLoad: currentLoad,
+    highlights,
+    concerns,
+    goalSuggestion,
+  };
+}
+
+export interface KnowledgeNode {
+  topic: string;
+  mastery: number;       // 0-100 average score
+  retention: number;     // 0-100 current retention
+  attempts: number;
+  status: 'mastered' | 'developing' | 'struggling' | 'new';
+  connections: string[]; // related topics
+}
+
+/**
+ * Build a knowledge map — topic nodes with mastery, retention, and connections.
+ */
+export function computeKnowledgeMap(quizHistory: QuizEntry[], retentionRates: RetentionRate[]): KnowledgeNode[] {
+  if (!quizHistory || quizHistory.length === 0) return [];
+
+  const topicScores: Record<string, number[]> = {};
+  for (const q of quizHistory) {
+    if (!topicScores[q.topic]) topicScores[q.topic] = [];
+    topicScores[q.topic].push(q.score);
+  }
+
+  const retentionMap: Record<string, number> = {};
+  for (const r of retentionRates) retentionMap[r.topic] = r.retention;
+
+  const topics = Object.keys(topicScores);
+
+  return topics.map(topic => {
+    const scores = topicScores[topic];
+    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    const retention = retentionMap[topic] ?? avg;
+    const status: KnowledgeNode['status'] = avg >= 85 ? 'mastered' : avg >= 70 ? 'developing' : avg >= 1 ? 'struggling' : 'new';
+
+    // Simple connection: topics studied in same week are connected
+    const topicWeeks = quizHistory.filter(q => q.topic === topic).map(q => q.week);
+    const connections = topics.filter(t => t !== topic && quizHistory.some(q => q.topic === t && topicWeeks.includes(q.week)));
+
+    return { topic, mastery: avg, retention, attempts: scores.length, status, connections: Array.from(new Set(connections)) };
+  });
+}

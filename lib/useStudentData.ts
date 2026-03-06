@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, onAuthStateChanged, getUserProfile, getAllModuleProgress, getAllSegmentQuizScores, getStudySessions } from './firebase';
-import { computeRetentionRates, computeOverallRetention, computeLearningVelocity, computePredictedScore, computeStudyEfficiency, getReviewDueTopics } from './learning-algorithms';
+import { computeRetentionRates, computeOverallRetention, computeLearningVelocity, computePredictedScore, computeStudyEfficiency, getReviewDueTopics, computeOptimalStudyTime, computeCognitiveLoad, getCurrentCognitiveLoad, computeWeeklyReport, computeKnowledgeMap } from './learning-algorithms';
+import type { StudySession } from './learning-algorithms';
 
 // ---- Mock / fallback data (used when user has < 1 real quiz score) ----
 const MOCK_STUDENT_DATA: any = {
@@ -33,14 +34,19 @@ const _ta = Object.entries(
 MOCK_STUDENT_DATA.weakTopics = _ta.filter(t => t.avg < 70).sort((a, b) => a.avg - b.avg).map(t => t.topic);
 MOCK_STUDENT_DATA.strongTopics = _ta.filter(t => t.avg >= 80).sort((a, b) => b.avg - a.avg).map(t => t.topic);
 
-// Pre-compute algorithm data for mock
-const _mockRetention = computeRetentionRates(MOCK_STUDENT_DATA.quizHistory, MOCK_STUDENT_DATA.weeksActive);
-MOCK_STUDENT_DATA.retentionRates = _mockRetention;
-MOCK_STUDENT_DATA.overallRetention = computeOverallRetention(_mockRetention);
-MOCK_STUDENT_DATA.learningVelocity = computeLearningVelocity(MOCK_STUDENT_DATA.quizHistory);
-MOCK_STUDENT_DATA.predictedScore = computePredictedScore(MOCK_STUDENT_DATA.quizHistory);
-MOCK_STUDENT_DATA.studyEfficiency = computeStudyEfficiency(MOCK_STUDENT_DATA.quizHistory, MOCK_STUDENT_DATA.weeklyHoursHistory);
-MOCK_STUDENT_DATA.reviewDueTopics = getReviewDueTopics(_mockRetention);
+// Pre-compute ALL algorithm data for mock (including new algorithms)
+// Generate mock study sessions spread across different times of day
+MOCK_STUDENT_DATA.rawStudySessions = [
+  { hour: 9, score: 88, duration: 45, timestamp: Date.now() - 6 * 86400000 },
+  { hour: 10, score: 92, duration: 60, timestamp: Date.now() - 5 * 86400000 },
+  { hour: 14, score: 75, duration: 30, timestamp: Date.now() - 4 * 86400000 },
+  { hour: 21, score: 65, duration: 40, timestamp: Date.now() - 3 * 86400000 },
+  { hour: 9, score: 90, duration: 50, timestamp: Date.now() - 2 * 86400000 },
+  { hour: 15, score: 80, duration: 35, timestamp: Date.now() - 1 * 86400000 },
+  { hour: 22, score: 60, duration: 45, timestamp: Date.now() - 7 * 86400000 },
+  { hour: 10, score: 85, duration: 55, timestamp: Date.now() - 8 * 86400000 },
+];
+attachAlgorithmData(MOCK_STUDENT_DATA);
 
 const MOCK_DASHBOARD_DATA: any = {
   student: { name: 'Narhen K.', email: 'student@ntu.edu.sg', persona: 'Long-term Gradual Learner', streak: 7 },
@@ -140,6 +146,7 @@ function attachAlgorithmData(studentData: any) {
   const quizHistory = studentData.quizHistory || [];
   const weeksActive = studentData.weeksActive || 1;
   const weeklyHoursHistory = studentData.weeklyHoursHistory || [];
+  const studySessions: StudySession[] = studentData.rawStudySessions || [];
 
   const retentionRates = computeRetentionRates(quizHistory, weeksActive);
   studentData.retentionRates = retentionRates;
@@ -148,6 +155,14 @@ function attachAlgorithmData(studentData: any) {
   studentData.predictedScore = computePredictedScore(quizHistory);
   studentData.studyEfficiency = computeStudyEfficiency(quizHistory, weeklyHoursHistory);
   studentData.reviewDueTopics = getReviewDueTopics(retentionRates);
+
+  // New algorithm outputs
+  studentData.optimalStudyTime = computeOptimalStudyTime(studySessions);
+  const cogLoad = computeCognitiveLoad(quizHistory);
+  studentData.cognitiveLoadHistory = cogLoad;
+  studentData.currentCognitiveLoad = getCurrentCognitiveLoad(cogLoad);
+  studentData.weeklyReport = computeWeeklyReport(quizHistory, weeklyHoursHistory, retentionRates, cogLoad);
+  studentData.knowledgeMap = computeKnowledgeMap(quizHistory, retentionRates);
 }
 
 /** Read localStorage progress and build real data from it (works for demo user without Firebase Auth) */
@@ -340,6 +355,23 @@ export function useStudentData() {
         const weeksActive = Math.max(1, maxWeek);
         const { weakTopics, strongTopics } = computeWeakStrong(quizHistory);
 
+        // Build rawStudySessions for optimal study time analysis
+        const rawStudySessions: StudySession[] = sessions.map((s: any) => {
+          const ts = s.timestamp?.toDate ? s.timestamp.toDate() : new Date();
+          // Pair each session with the closest quiz score from that period
+          const sessionWeek = Math.max(1, Math.ceil((Date.now() - ts.getTime()) / (7 * 86400000)));
+          const weekQuizzes = quizHistory.filter((q: any) => q.week === sessionWeek);
+          const avgQuizScore = weekQuizzes.length > 0
+            ? Math.round(weekQuizzes.reduce((a: number, q: any) => a + q.score, 0) / weekQuizzes.length)
+            : 75;
+          return {
+            hour: ts.getHours(),
+            score: avgQuizScore,
+            duration: s.durationMinutes || 30,
+            timestamp: ts.getTime(),
+          };
+        });
+
         const realStudentData: any = {
           name: profile?.displayName || user.displayName || 'Student',
           learningStyle: profile?.persona?.learningStyle || 'Long-term Gradual',
@@ -347,6 +379,7 @@ export function useStudentData() {
           modules,
           weeklyHoursHistory: weeklyHoursHistory.length > 0 ? weeklyHoursHistory : [0],
           quizHistory,
+          rawStudySessions,
           loginFrequency: weeklyHoursHistory.map(() => Math.round(Math.random() * 3 + 3)),
           avgSessionMinutes: sessions.length > 0
             ? Math.round(sessions.reduce((a: number, s: any) => a + (s.durationMinutes || 0), 0) / sessions.length)

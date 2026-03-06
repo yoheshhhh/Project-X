@@ -88,40 +88,22 @@ async function callTutorAI(prompt: string): Promise<string | null> {
 
 export async function POST(request: Request) {
   try {
-    const { question, image } = await request.json() as { question?: string; image?: string };
+    const { question, image, learningContext } = await request.json() as { question?: string; image?: string; learningContext?: any };
     const hasImage = typeof image === 'string' && image.startsWith('data:image');
     if (!question && !hasImage) {
       return NextResponse.json({ answer: 'Please ask a question or attach an image!' }, { status: 400 });
     }
     const questionText = question || 'The student shared an image. Extract any text, doubt, or question from the image and answer it.';
 
-    log.info('Tutor query', { question: questionText.slice(0, 80), hasImage });
+    log.info('Tutor query', { question: questionText.slice(0, 80), hasImage, hasLearningContext: !!learningContext });
 
-    // ── Step 1: Get student data ──
+    // ── Step 1: Get student data (static module data) ──
     const studentData = await getStudentData('student_1');
-    if (!studentData) {
-      return NextResponse.json({ answer: 'No module data found for student.' });
-    }
 
     // ── Step 2: Extract fields ──
-    const topics: Record<string, any> = studentData.moduleData || {};
-    const recommendedSeq: string[] = studentData.predictions?.recommendedSequenceOfTopics || [];
-    const history: Record<string, number> = studentData.history || {};
-    const dna: Record<string, any> = studentData.dna || {};
-
-    const memoryRetention: Record<string, number> = {};
-    const mistakes: Record<string, number> = {};
-    const confidence: Record<string, number> = {};
-    const flashcardDiff: Record<string, string> = {};
-    const hints: Record<string, string> = {};
-
-    for (const t of Object.keys(topics)) {
-      memoryRetention[t] = topics[t].memoryRetentionRate;
-      mistakes[t] = topics[t].mistakesMade;
-      confidence[t] = topics[t].confidence;
-      flashcardDiff[t] = topics[t].flashcardDifficulty;
-      hints[t] = topics[t].hint;
-    }
+    const topics: Record<string, any> = studentData?.moduleData || {};
+    const history: Record<string, number> = studentData?.history || {};
+    const dna: Record<string, any> = studentData?.dna || {};
 
     const historyScores = Object.values(history);
     const { prediction: pred, status } = analyzePerformance(historyScores);
@@ -132,13 +114,32 @@ export async function POST(request: Request) {
       ? `\nRelevant course material from lectures:\n${relevantChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}`
       : '';
 
+    // ── Step 2.6: Build live learning analytics context ──
+    const lc = learningContext || {};
+    const analyticsContext = learningContext ? `
+LIVE LEARNING ANALYTICS (real-time from student's Firebase data):
+- Overall Memory Retention: ${lc.overallRetention ?? 'N/A'}%
+- Cognitive Load: ${lc.cognitiveLoad?.load ?? 'N/A'}% (${lc.cognitiveLoad?.level ?? 'unknown'}, trend: ${lc.cognitiveLoad?.trend ?? 'stable'})
+- Learning Velocity: ${lc.learningVelocity?.velocity ?? 0} pts/quiz (${lc.learningVelocity?.trend ?? 'steady'})
+- Predicted Next Score: ${lc.predictedScore?.predicted ?? 'N/A'}% (confidence: ${Math.round((lc.predictedScore?.confidence ?? 0) * 100)}%)
+- Weak Topics: ${(lc.weakTopics || []).join(', ') || 'None identified'}
+- Strong Topics: ${(lc.strongTopics || []).join(', ') || 'None identified'}
+- Memory Retention by Topic:
+${(lc.retentionRates || []).map((r: any) => `  * ${r.topic}: ${r.retention}% retention (${r.urgency}, ${r.daysSinceStudied}d ago)`).join('\n') || '  No data'}
+- Optimal Study Times:
+${(lc.optimalStudyTime || []).map((t: any) => `  * ${t.label}: ${t.avgScore}% avg (${t.performance})`).join('\n') || '  No data'}
+- This Week: ${lc.weeklyReport?.quizzesCompleted ?? 0} quizzes, avg ${lc.weeklyReport?.avgScore ?? 0}%, improvement ${lc.weeklyReport?.improvement >= 0 ? '+' : ''}${lc.weeklyReport?.improvement ?? 0}%
+- Knowledge Map: ${(lc.knowledgeMap || []).map((n: any) => `${n.topic}:${n.mastery}%(${n.status})`).join(', ') || 'No data'}
+- AI Goal Suggestion: ${lc.weeklyReport?.goalSuggestion || 'N/A'}
+` : '';
+
     // ── Step 3: Build prompt ──
     const prompt = `
-You are Guardian AI, an academic tutor for a Software Security module (SC3010).
+You are Guardian AI, an advanced AI Study Coach and academic tutor for NTU Singapore courses.
+You have FULL access to the student's real-time learning analytics from Firebase.
 
-Student learning style: ${dna.learningStyle || 'unknown'}
-Personality traits: ${JSON.stringify(dna.personalityTraits || [])}
-Peak focus time: ${studentData.studyPatterns?.peakFocusTime || 'unknown'}
+Student learning style: ${dna.learningStyle || lc.learningVelocity?.trend || 'unknown'}
+${analyticsContext}
 
 Detailed performance per topic:
 ${Object.entries(topics).map(([k, v]: any) =>
@@ -154,25 +155,25 @@ ${Object.entries(topics).map(([k, v]: any) =>
 ).join('\n')}
 
 Study patterns:
-- Peak focus time: ${studentData.studyPatterns?.peakFocusTime || 'unknown'}
-- Preferred session length: ${studentData.studyPatterns?.preferredSessionLengthMinutes || 'unknown'} minutes
-- Review frequency: ${studentData.studyPatterns?.reviewFrequency || 'unknown'}
-- Best day: ${studentData.studyPatterns?.bestDayOfWeek || 'unknown'}
-- Worst day: ${studentData.studyPatterns?.worstDayOfWeek || 'unknown'}
+- Peak focus time: ${studentData?.studyPatterns?.peakFocusTime || 'unknown'}
+- Preferred session length: ${studentData?.studyPatterns?.preferredSessionLengthMinutes || 'unknown'} minutes
+- Review frequency: ${studentData?.studyPatterns?.reviewFrequency || 'unknown'}
+- Best day: ${studentData?.studyPatterns?.bestDayOfWeek || 'unknown'}
+- Worst day: ${studentData?.studyPatterns?.worstDayOfWeek || 'unknown'}
 
-Easiest topics: ${JSON.stringify(studentData.topicInsights?.easiestTopics || [])}
-Hardest topics: ${JSON.stringify(studentData.topicInsights?.hardestTopics || [])}
-Most time consuming: ${JSON.stringify(studentData.topicInsights?.mostTimeConsuming || [])}
+Easiest topics: ${JSON.stringify(studentData?.topicInsights?.easiestTopics || [])}
+Hardest topics: ${JSON.stringify(studentData?.topicInsights?.hardestTopics || [])}
+Most time consuming: ${JSON.stringify(studentData?.topicInsights?.mostTimeConsuming || [])}
 
-Quiz score history: ${JSON.stringify(historyScores)}
-Predicted next score: ${pred}, Trend: ${status}
-Topics to focus next: ${JSON.stringify(studentData.predictions?.topicsToFocusNext || [])}
+Quiz score history: ${JSON.stringify(historyScores.length > 0 ? historyScores : (lc.retentionRates || []).map((r: any) => r.retention))}
+Predicted next score: ${pred ?? lc.predictedScore?.predicted ?? 'N/A'}, Trend: ${status}
+Topics to focus next: ${JSON.stringify(studentData?.predictions?.topicsToFocusNext || [])}
 ${courseContext}
 
-Student question: ${question}
+Student question: ${questionText}${hasImage ? ' (The student attached an image — read it and address any doubt or question shown.)' : ''}
 
 Recent quiz mistakes:
-${Object.entries(studentData.quizDetails || {}).map(([quiz, details]: any) =>
+${Object.entries(studentData?.quizDetails || {}).map(([quiz, details]: any) =>
   `${quiz} (${details.topic}, score: ${details.score}/${details.totalQuestions}):
 ${(details.wrongQuestions || []).map((q: any) =>
   `  - Question: "${q.question}"
@@ -183,15 +184,16 @@ ${(details.wrongQuestions || []).map((q: any) =>
 ).join('\n')}`
 ).join('\n\n')}
 
-Based on the student's performance data, quiz mistakes AND the relevant course material above:
+Based on the student's performance data, quiz mistakes, live analytics AND the relevant course material above:
 1. Answer their question directly, referencing specific lecture content where relevant.
 2. Mention specific quiz mistakes that relate to their question — call out exact wrong answers.
-3. Analyse their memory retention and confidence for related topics — use the actual numbers.
+3. Analyse their memory retention and confidence for related topics — use the actual numbers from live analytics.
 4. Reference their mistake pattern (conceptual vs memory mistakes) to explain why they struggle.
-5. Look at their study patterns (peak focus time: ${studentData.studyPatterns?.peakFocusTime}, best day: ${studentData.studyPatterns?.bestDayOfWeek}) and tailor advice around those.
-6. Suggest a very specific next action based on their flashcard difficulty and preferred study method.
-7. Be detailed, data-driven, and encouraging — like a personal tutor who knows everything about this student.
-
+5. Look at their study patterns (peak focus time: ${studentData?.studyPatterns?.peakFocusTime}, best day: ${studentData?.studyPatterns?.bestDayOfWeek}) and cognitive load to tailor advice.
+6. If they ask about study plans, use their optimal study time data and cognitive load to suggest a schedule.
+7. If they ask about weak topics, reference the actual retention rates and urgency levels.
+8. Suggest a very specific next action based on their flashcard difficulty, preferred study method, and spaced repetition needs.
+9. Be detailed, data-driven, and encouraging — like a personal tutor who knows everything about this student.
 `;
 
     // ── Step 4: Call OpenAI (vision when image attached) ──
@@ -227,9 +229,11 @@ Based on the student's performance data, quiz mistakes AND the relevant course m
       return NextResponse.json({ answer: response });
     }
 
-    // Fallback
+    // Fallback — use learning context if available
+    const weakList = (lc.weakTopics || []).slice(0, 3).join(', ') || 'some topics';
+    const retStr = (lc.retentionRates || []).slice(0, 3).map((r: any) => `${r.topic} (${r.retention}%)`).join(', ') || 'N/A';
     return NextResponse.json({
-      answer: `Tutor is resting 😴 AI is unavailable right now. Quick summary from your data: your weakest topics are ${Object.entries(confidence).sort((a, b) => (a[1] as number) - (b[1] as number)).slice(0, 3).map(([k, v]) => `${topics[k]?.name || k} (${Math.round((v as number) * 100)}%)`).join(', ')}. Focus on those first!`,
+      answer: `Tutor is resting 😴 AI is unavailable right now. Quick summary from your data: your weakest topics are ${weakList}. Current retention: ${retStr}. Focus on those first!`,
     });
 
   } catch (error: any) {

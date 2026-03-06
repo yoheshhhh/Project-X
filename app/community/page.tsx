@@ -1,7 +1,10 @@
 'use client';
 
 import AuthGuard from '@/components/AuthGuard';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useStudentData } from '@/lib/useStudentData';
+import { auth, saveStudyProfile, getStudyProfile, findStudyMatches } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const mockPosts = [
   {
@@ -103,6 +106,79 @@ export default function CommunityPage() {
   const [showReplying, setShowReplying] = useState<number | null>(null);
   const [expandedPost, setExpandedPost] = useState<number | null>(null);
   const [voted, setVoted] = useState<Record<string, boolean>>({});
+
+  // Study Matcher state
+  const { studentData } = useStudentData();
+  const [showMatcher, setShowMatcher] = useState(false);
+  const [matcherOptedIn, setMatcherOptedIn] = useState(false);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchProfile, setMatchProfile] = useState<any>(null);
+
+  const weakTopics = studentData?.weakTopics || [];
+  const strongTopics = studentData?.strongTopics || [];
+
+  const loadMatcherData = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const profile = await getStudyProfile(user.uid);
+      if (profile) {
+        setMatchProfile(profile);
+        setMatcherOptedIn(!!(profile as any).optIn);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleOptIn = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    setMatchLoading(true);
+    try {
+      await saveStudyProfile(user.uid, {
+        displayName: user.displayName || 'Student',
+        weakTopics,
+        strongTopics,
+        studyStyle: studentData?.learningStyle || 'Unknown',
+        lookingForHelp: weakTopics,
+        canHelpWith: strongTopics,
+        optIn: true,
+      });
+      setMatcherOptedIn(true);
+      // Find matches
+      const found = await findStudyMatches(user.uid, weakTopics);
+      setMatches(found);
+    } catch { /* ignore */ }
+    setMatchLoading(false);
+  };
+
+  const handleFindMatches = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    setMatchLoading(true);
+    try {
+      // Update profile with latest data
+      await saveStudyProfile(user.uid, {
+        displayName: user.displayName || 'Student',
+        weakTopics,
+        strongTopics,
+        studyStyle: studentData?.learningStyle || 'Unknown',
+        lookingForHelp: weakTopics,
+        canHelpWith: strongTopics,
+        optIn: true,
+      });
+      const found = await findStudyMatches(user.uid, weakTopics);
+      setMatches(found);
+    } catch { /* ignore */ }
+    setMatchLoading(false);
+  };
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) loadMatcherData();
+    });
+    return () => unsub();
+  }, [loadMatcherData]);
 
   // New post form
   const [newTitle, setNewTitle] = useState('');
@@ -327,6 +403,96 @@ export default function CommunityPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* AI Study Matcher */}
+          <div className="mb-6 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/20 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  🤝 AI Study Matcher
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">ML-Powered</span>
+                </h3>
+                <p className="text-sm text-slate-400 mt-1">Find study partners whose strengths complement your weak topics</p>
+              </div>
+              <button onClick={() => setShowMatcher(!showMatcher)}
+                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-sm px-4 py-2 rounded-lg transition-all">
+                {showMatcher ? 'Hide' : 'Find Partners'}
+              </button>
+            </div>
+
+            {showMatcher && (
+              <div className="mt-4">
+                {/* Your profile summary */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="p-3 bg-white/5 rounded-xl">
+                    <p className="text-xs text-slate-400 mb-1">You need help with:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {weakTopics.length > 0 ? weakTopics.map((t: string) => (
+                        <span key={t} className="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full">{t}</span>
+                      )) : <span className="text-xs text-slate-500">No weak topics detected</span>}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-xl">
+                    <p className="text-xs text-slate-400 mb-1">You can help with:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {strongTopics.length > 0 ? strongTopics.map((t: string) => (
+                        <span key={t} className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">{t}</span>
+                      )) : <span className="text-xs text-slate-500">No strong topics yet</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {!matcherOptedIn ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-slate-300 mb-3">Opt in to let AI match you with complementary study partners. Your topic strengths/weaknesses are shared anonymously.</p>
+                    <button onClick={handleOptIn} disabled={matchLoading}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white font-semibold px-6 py-2.5 rounded-xl transition-all">
+                      {matchLoading ? 'Finding matches...' : 'Opt In & Find Matches'}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm text-emerald-300 font-medium">Matched Study Partners</p>
+                      <button onClick={handleFindMatches} disabled={matchLoading}
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-all">
+                        {matchLoading ? 'Searching...' : 'Refresh Matches'}
+                      </button>
+                    </div>
+                    {matches.length > 0 ? (
+                      <div className="space-y-2">
+                        {matches.slice(0, 5).map((m: any, i: number) => (
+                          <div key={i} className="p-3 bg-white/5 rounded-xl flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-white">{m.displayName || 'Student'}</p>
+                              <p className="text-xs text-slate-400">Style: {m.studyStyle || 'Unknown'}</p>
+                              {m.canHelpWith && m.canHelpWith.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  <span className="text-xs text-slate-500">Can help you with:</span>
+                                  {m.canHelpWith.map((t: string) => (
+                                    <span key={t} className="text-xs bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
+                                {Math.round(m.matchScore * 20)}% match
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 text-center py-3">
+                        {matchLoading ? 'Searching for compatible study partners...' : 'No matches found yet. More students need to opt in!'}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* New Post Modal */}

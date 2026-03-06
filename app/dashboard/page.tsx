@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useStudentData, detectPhase } from '@/lib/useStudentData';
+import { auth, saveStudyGoal, getStudyGoals, updateStudyGoal, deleteStudyGoal } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 function BarChart({ data, maxVal, color }: { data: { label: string; value: number }[]; maxVal?: number; color?: string }) {
   const max = maxVal || Math.max(...data.map(d => d.value), 1);
@@ -65,9 +67,66 @@ export default function DashboardPage() {
   const predictedScore = studentData.predictedScore ?? { predicted: 0, confidence: 0, trend: 'stable' };
   const reviewDueTopics = studentData.reviewDueTopics ?? [];
 
+  // New algorithm-computed metrics
+  const optimalStudyTime = studentData.optimalStudyTime ?? [];
+  const currentCognitiveLoad = studentData.currentCognitiveLoad ?? { load: 0, level: 'optimal', trend: 'stable' };
+  const weeklyReport = studentData.weeklyReport ?? { weekNumber: 1, totalHours: 0, quizzesCompleted: 0, avgScore: 0, topicsStudied: [], improvement: 0, retentionAlerts: 0, cognitiveLoad: 0, highlights: [], concerns: [], goalSuggestion: '' };
+  const knowledgeMap = studentData.knowledgeMap ?? [];
+  const peakTime = optimalStudyTime.find((t: any) => t.performance === 'peak') || optimalStudyTime.find((t: any) => t.sessionCount > 0) || null;
+
+  // Goal management
+  const [goals, setGoals] = useState<any[]>([]);
+  const [showGoalForm, setShowGoalForm] = useState(false);
+  const [goalForm, setGoalForm] = useState({ goalType: 'score' as 'score' | 'hours' | 'streak' | 'topic-mastery', targetValue: 80, description: '', topic: '' });
+
+  const loadGoals = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const g = await getStudyGoals(user.uid);
+      setGoals(g);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) loadGoals();
+    });
+    return () => unsub();
+  }, [loadGoals]);
+
+  const handleAddGoal = async () => {
+    const user = auth.currentUser;
+    if (!user || !goalForm.description.trim()) return;
+    try {
+      await saveStudyGoal(user.uid, goalForm);
+      setShowGoalForm(false);
+      setGoalForm({ goalType: 'score', targetValue: 80, description: '', topic: '' });
+      await loadGoals();
+    } catch (e: any) { console.error('Failed to save goal:', e.message); }
+  };
+
+  const handleDeleteGoal = async (goalId: string) => {
+    try {
+      await deleteStudyGoal(goalId);
+      await loadGoals();
+    } catch (e: any) { console.error('Failed to delete goal:', e.message); }
+  };
+
+  const handleCompleteGoal = async (goalId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      await updateStudyGoal(user.uid, goalId, { status: 'completed', progress: 100 });
+      await loadGoals();
+    } catch (e: any) { console.error('Failed to complete goal:', e.message); }
+  };
+
   const retentionColor = overallRetention >= 75 ? 'text-green-400' : overallRetention >= 50 ? 'text-amber-400' : 'text-red-400';
   const trendArrow = learningVelocity.trend === 'accelerating' ? '\u2191' : learningVelocity.trend === 'decelerating' ? '\u2193' : '\u2192';
   const trendColor = learningVelocity.trend === 'accelerating' ? 'text-green-400' : learningVelocity.trend === 'decelerating' ? 'text-red-400' : 'text-slate-400';
+  const cogLoadColor = currentCognitiveLoad.level === 'optimal' ? 'text-green-400' : currentCognitiveLoad.level === 'moderate' ? 'text-amber-400' : 'text-red-400';
+  const cogLoadBarColor = currentCognitiveLoad.level === 'optimal' ? '#22c55e' : currentCognitiveLoad.level === 'moderate' ? '#f59e0b' : '#ef4444';
 
   // Phase-adaptive greeting
   const firstName = data.student.name.split(' ')[0];
@@ -142,7 +201,7 @@ export default function DashboardPage() {
         )}
 
         {/* Top Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🧠</span>
@@ -160,6 +219,16 @@ export default function DashboardPage() {
               <span className="text-sm font-normal text-slate-400"> pts/quiz</span>
               <span className={`ml-1 text-lg ${trendColor}`}>{trendArrow}</span>
             </p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🧩</span>
+              <span className="text-xs text-slate-400">Cognitive Load</span>
+            </div>
+            <p className={`text-2xl font-bold ${cogLoadColor}`}>{currentCognitiveLoad.load}%</p>
+            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mt-1">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${currentCognitiveLoad.load}%`, backgroundColor: cogLoadBarColor }} />
+            </div>
           </div>
           {[
             { label: 'Day Streak', value: `${data.student.streak} days`, icon: '🔥' },
@@ -228,6 +297,79 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {/* Weekly Progress Report */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">📊 Weekly Progress Report</h3>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <p className="text-2xl font-bold text-blue-400">{weeklyReport.quizzesCompleted}</p>
+                  <p className="text-xs text-slate-400">Quizzes</p>
+                </div>
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <p className={`text-2xl font-bold ${weeklyReport.avgScore >= 80 ? 'text-green-400' : weeklyReport.avgScore >= 60 ? 'text-amber-400' : 'text-red-400'}`}>{weeklyReport.avgScore}%</p>
+                  <p className="text-xs text-slate-400">Avg Score</p>
+                </div>
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <p className={`text-2xl font-bold ${weeklyReport.improvement >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {weeklyReport.improvement >= 0 ? '+' : ''}{weeklyReport.improvement}%
+                  </p>
+                  <p className="text-xs text-slate-400">vs Last Week</p>
+                </div>
+              </div>
+              {weeklyReport.highlights.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-green-400 font-medium mb-1.5">Highlights</p>
+                  {weeklyReport.highlights.map((h: string, i: number) => (
+                    <p key={i} className="text-xs text-slate-300 flex items-start gap-1.5 mb-1"><span className="text-green-400 mt-0.5">+</span>{h}</p>
+                  ))}
+                </div>
+              )}
+              {weeklyReport.concerns.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-amber-400 font-medium mb-1.5">Areas to Watch</p>
+                  {weeklyReport.concerns.map((c: string, i: number) => (
+                    <p key={i} className="text-xs text-slate-300 flex items-start gap-1.5 mb-1"><span className="text-amber-400 mt-0.5">!</span>{c}</p>
+                  ))}
+                </div>
+              )}
+              {weeklyReport.goalSuggestion && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <p className="text-xs text-blue-300"><span className="font-medium">AI Goal Suggestion:</span> {weeklyReport.goalSuggestion}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Knowledge Map */}
+            {knowledgeMap.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <h3 className="text-lg font-bold text-white mb-4">🗺️ Knowledge Map</h3>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {knowledgeMap.map((node: any) => {
+                    const size = Math.max(60, Math.min(100, 40 + node.attempts * 15));
+                    const bgColor = node.status === 'mastered' ? 'bg-green-500/20 border-green-500/40' :
+                      node.status === 'developing' ? 'bg-blue-500/20 border-blue-500/40' :
+                      node.status === 'struggling' ? 'bg-red-500/20 border-red-500/40' :
+                      'bg-slate-500/20 border-slate-500/40';
+                    const textColor = node.status === 'mastered' ? 'text-green-300' :
+                      node.status === 'developing' ? 'text-blue-300' :
+                      node.status === 'struggling' ? 'text-red-300' : 'text-slate-400';
+                    return (
+                      <div key={node.topic} className={`${bgColor} border rounded-2xl flex flex-col items-center justify-center p-3 transition-all hover:scale-105`}
+                        style={{ width: `${size}px`, height: `${size}px` }}>
+                        <span className={`text-xs font-bold ${textColor} text-center leading-tight`}>{node.topic.length > 12 ? node.topic.slice(0, 10) + '..' : node.topic}</span>
+                        <span className={`text-xs ${textColor} mt-1`}>{node.mastery}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-400">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500/30 border border-green-500/50" /> Mastered</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500/30 border border-blue-500/50" /> Developing</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500/30 border border-red-500/50" /> Struggling</span>
+                </div>
+              </div>
+            )}
+
             {/* AI Practice Paper — now links to full page */}
             <div className="bg-gradient-to-r from-violet-500/10 to-blue-500/10 border border-violet-500/20 rounded-2xl p-6">
               <div className="flex items-center justify-between">
@@ -285,6 +427,97 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* Optimal Study Time */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">🕐 Optimal Study Time</h3>
+              {peakTime ? (
+                <div className="mb-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-sm text-green-300 font-medium">Peak: {peakTime.label}</p>
+                  <p className="text-xs text-slate-400 mt-1">Avg score: {peakTime.avgScore}% across {peakTime.sessionCount} sessions</p>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 mb-3">Complete more study sessions to discover your peak time.</p>
+              )}
+              <div className="space-y-2">
+                {optimalStudyTime.map((t: any) => {
+                  const perfColor = t.performance === 'peak' ? '#22c55e' : t.performance === 'good' ? '#3b82f6' : t.performance === 'low' ? '#ef4444' : '#334155';
+                  const perfBadge = t.performance === 'peak' ? 'bg-green-500/20 text-green-300' : t.performance === 'good' ? 'bg-blue-500/20 text-blue-300' : t.performance === 'low' ? 'bg-red-500/20 text-red-300' : 'bg-slate-500/20 text-slate-500';
+                  return (
+                    <div key={t.label} className="flex items-center gap-3">
+                      <span className="text-xs text-slate-400 w-32 truncate">{t.label}</span>
+                      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${t.avgScore || 0}%`, backgroundColor: perfColor }} />
+                      </div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${perfBadge}`}>
+                        {t.avgScore ? `${t.avgScore}%` : '--'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Goal Setting */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">🎯 Study Goals</h3>
+                <button onClick={() => setShowGoalForm(!showGoalForm)} className="text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-3 py-1.5 rounded-lg transition-all">
+                  {showGoalForm ? 'Cancel' : '+ New Goal'}
+                </button>
+              </div>
+              {showGoalForm && (
+                <div className="mb-4 p-3 bg-white/5 rounded-xl space-y-2">
+                  <select value={goalForm.goalType} onChange={e => setGoalForm(f => ({ ...f, goalType: e.target.value as any }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                    <option value="score">Target Score</option>
+                    <option value="hours">Study Hours</option>
+                    <option value="streak">Day Streak</option>
+                    <option value="topic-mastery">Topic Mastery</option>
+                  </select>
+                  <input type="text" placeholder="Goal description..." value={goalForm.description}
+                    onChange={e => setGoalForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="Target" value={goalForm.targetValue}
+                      onChange={e => setGoalForm(f => ({ ...f, targetValue: Number(e.target.value) }))}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white" />
+                    {goalForm.goalType === 'topic-mastery' && (
+                      <input type="text" placeholder="Topic" value={goalForm.topic}
+                        onChange={e => setGoalForm(f => ({ ...f, topic: e.target.value }))}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                    )}
+                  </div>
+                  <button onClick={handleAddGoal} className="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 rounded-lg transition-all">Save Goal</button>
+                </div>
+              )}
+              {goals.length > 0 ? (
+                <div className="space-y-2">
+                  {goals.slice(0, 5).map((g: any) => {
+                    const isComplete = g.status === 'completed';
+                    return (
+                      <div key={g.id} className={`p-3 rounded-xl ${isComplete ? 'bg-green-500/10 border border-green-500/20' : 'bg-white/5'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm ${isComplete ? 'text-green-300 line-through' : 'text-slate-200'}`}>{g.description}</span>
+                          <div className="flex items-center gap-1">
+                            {!isComplete && (
+                              <button onClick={() => handleCompleteGoal(g.id)} className="text-xs text-green-400 hover:text-green-300 px-1">Done</button>
+                            )}
+                            <button onClick={() => handleDeleteGoal(g.id)} className="text-xs text-slate-500 hover:text-red-400 px-1">x</button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <span className="px-1.5 py-0.5 rounded bg-white/5">{g.goalType}</span>
+                          <span>Target: {g.targetValue}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-3">No goals set yet. Create one to track your progress!</p>
+              )}
+            </div>
 
             {/* Peer Comparison */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">

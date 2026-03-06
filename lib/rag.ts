@@ -1,17 +1,26 @@
-import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
-);
+async function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  const { createClient } = await import('@supabase/supabase-js');
+  return createClient(url, key);
+}
 
 export async function retrieveRelevantChunks(
-  question: string,
+  question: string | undefined,
   topK = 4
 ): Promise<string[]> {
   try {
+    if (!question) return [];
+    const supabase = await getSupabase();
+    if (!supabase) return [];
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return [];
+
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey });
+
     // 1. Embed the student's question
     const res = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
