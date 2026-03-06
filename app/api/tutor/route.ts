@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
 import { complete as openAIComplete } from '@/lib/openai-ai';
 import { retrieveRelevantChunks } from '@/lib/rag';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:AITutor');
 
@@ -87,6 +88,9 @@ async function callTutorAI(prompt: string): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { question, image, learningContext } = await request.json() as { question?: string; image?: string; learningContext?: any };
     const hasImage = typeof image === 'string' && image.startsWith('data:image');
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
     log.info('Tutor query', { question: questionText.slice(0, 80), hasImage, hasLearningContext: !!learningContext });
 
     // ── Step 1: Get student data (static module data) ──
-    const studentData = await getStudentData('student_1');
+    const studentData = await getStudentData(authResult.uid);
 
     // ── Step 2: Extract fields ──
     const topics: Record<string, any> = studentData?.moduleData || {};

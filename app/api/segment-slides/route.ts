@@ -3,6 +3,7 @@ import { readFile, readdir } from 'fs/promises';
 import path from 'path';
 import { demoModule } from '@/data/demoModule';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:SegmentSlides');
 
@@ -61,6 +62,9 @@ function topicFromFirstPage(pages: Array<{ text?: string }>): string | undefined
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { searchParams } = new URL(request.url);
     const _moduleId = searchParams.get('moduleId') ?? 'demo-1';

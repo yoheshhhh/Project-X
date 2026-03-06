@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LEARNER_TYPES, getLearnerType } from '@/data/learnerTypes';
 import { auth, savePersona } from '@/lib/firebase';
 import type { LearnerPersona } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 
 const questions = [
   { id: 'pq1', question: 'When preparing for an exam, I typically...', options: [{ value: 'short-term-intensive', label: 'Cram intensively in the last few days' }, { value: 'long-term-gradual', label: 'Study a little bit every day over weeks' }], key: 'learningStyle' },
@@ -103,7 +104,7 @@ export default function QuizPage() {
   const fetchExplanation = async (question: string, userAnswer: string, correctAnswer: string, topic: string, allOptions: string[]) => {
     setExplanationLoading(true);
     try {
-      const res = await fetch('/api/quiz-explain', {
+      const res = await authFetch('/api/quiz-explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, userAnswer, correctAnswer, topic, allOptions }),
@@ -201,7 +202,7 @@ export default function QuizPage() {
     }
     setPersonaLoading(true);
     try {
-      const res = await fetch('/api/generate-persona-traits', {
+      const res = await authFetch('/api/generate-persona-traits', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           learningStyle: p.learningStyle, studyHoursPerDay: p.studyHoursPerDay,

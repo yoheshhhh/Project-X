@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePracticePaper } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:Practice');
 
@@ -12,6 +13,9 @@ const log = logger.child('API:Practice');
  * Returns: { questions: PracticeQuestion[] }
  */
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { moduleName, weakTopics, preferredFormat, questionCount } = await request.json();
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePersonaFromProfile } from '@/lib/openai-ai';
+import { verifyAuth } from '@/lib/api-auth';
 
 /**
  * POST /api/generate-persona-traits
@@ -7,6 +8,9 @@ import { generatePersonaFromProfile } from '@/lib/openai-ai';
  * Returns: { personalityTraits: string[], learnerTypes: string[] }
  */
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const body = await request.json();
     const {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { complete } from '@/lib/openai-ai';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('QuizExplainer');
 
@@ -13,6 +14,9 @@ async function callAI(prompt: string): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { question, userAnswer, correctAnswer, topic, allOptions } = await request.json();
     log.info('Explaining quiz answer', { topic, correct: userAnswer === correctAnswer });

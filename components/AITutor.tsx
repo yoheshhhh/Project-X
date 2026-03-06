@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudentData } from '@/lib/useStudentData';
+import { authFetch } from '@/lib/api-client';
 
 type Message = { role: 'user' | 'ai'; text: string; image?: string };
 type ChatSize = 'compact' | 'expanded' | 'fullscreen';
@@ -170,7 +171,7 @@ export default function AITutor() {
         })),
       };
 
-      const res = await fetch('/api/tutor', {
+      const res = await authFetch('/api/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: questionToSend, image: imageToSend, learningContext }),

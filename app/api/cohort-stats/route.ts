@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { verifyAuth } from '@/lib/api-auth';
 
 // 5-minute in-memory cache
 let cache: { cohortAvg: number; top10: number; notEnoughData: boolean; timestamp: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   // Return cached if fresh
   if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
     return NextResponse.json({ cohortAvg: cache.cohortAvg, top10: cache.top10, notEnoughData: cache.notEnoughData });

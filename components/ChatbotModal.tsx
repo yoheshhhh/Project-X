@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { authFetch } from '@/lib/api-client';
 
 export type ChatMessage = { role: 'user' | 'model'; text: string; image?: string };
 
@@ -79,7 +80,7 @@ export function ChatbotModal({
         content: m.text,
       }));
 
-      const res = await fetch('/api/chat', {
+      const res = await authFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

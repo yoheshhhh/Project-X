@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Practice Paper Generator API
@@ -325,6 +326,9 @@ Respond ONLY with valid JSON array (no markdown, no backticks, no preamble):
 /* ── Request Handler ─────────────────────────────────────────────────────── */
 
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const startTime = Date.now();
 
   try {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStudentData, detectPhase } from '@/lib/useStudentData';
 import { auth, saveStudyGoal, getStudyGoals, updateStudyGoal, deleteStudyGoal } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 import { onAuthStateChanged } from 'firebase/auth';
 
 function BarChart({ data, maxVal, color }: { data: { label: string; value: number }[]; maxVal?: number; color?: string }) {
@@ -54,7 +55,7 @@ export default function DashboardPage() {
   const checkBurnout = async () => {
     setBurnoutLoading(true);
     try {
-      const res = await fetch('/api/burnout', {
+      const res = await authFetch('/api/burnout', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionsThisWeek: data.weeklyHours.filter((d: any) => d.hours > 0).length,

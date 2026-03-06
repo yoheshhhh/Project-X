@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { LinearRegression } from '@/lib/insights-data';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('PredictionEngine');
 
 export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { scores, topics } = await request.json();
     log.info('Prediction requested', { scoreCount: scores.length });

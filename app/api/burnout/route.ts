@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { complete } from '@/lib/openai-ai';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('BurnoutAPI');
 
-export async function POST(request) {
+export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const studyData = await request.json();
     log.info('Burnout analysis requested', { hours: studyData.totalHoursThisWeek });

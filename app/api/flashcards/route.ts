@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
 import { complete } from '@/lib/openai-ai';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('FlashcardGenerator');
 
@@ -106,6 +107,9 @@ Respond ONLY with valid JSON (no backticks):
 }
 
 export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { topic, score, context } = await request.json();
     log.info('Generating flashcards', { topic, score });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { complete as openAIComplete } from '@/lib/openai-ai';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:AdaptiveQuiz');
 
@@ -94,6 +95,9 @@ function computeAdaptiveDifficulty(
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const body = await request.json();
     const {

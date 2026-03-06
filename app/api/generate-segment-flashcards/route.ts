@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { generateSegmentFlashcards, generateFlashcardsForSegmentByTopic } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:GenerateSegmentFlashcards');
 
@@ -74,6 +75,9 @@ Reply in this exact JSON format only:
  * Returns: { flashcards: { front: string, back: string }[] }
  */
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   let segmentIndex = 0;
   try {
     const body = await request.json();

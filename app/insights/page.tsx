@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useStudentData } from '@/lib/useStudentData';
+import { authFetch } from '@/lib/api-client';
 
 const pc: any = { 'onboarding':'#3b82f6','building-momentum':'#10b981','steady-progress':'#22c55e','accelerating':'#8b5cf6','plateauing':'#f59e0b','declining':'#ef4444','inactive':'#6b7280','at-risk':'#dc2626' };
 const pe: any = { 'onboarding':'🌱','building-momentum':'🚀','steady-progress':'📈','accelerating':'⚡','plateauing':'📊','declining':'📉','inactive':'💤','at-risk':'🚨' };
@@ -14,7 +15,7 @@ function PredictionTab({ scores, topics }: any) {
       try {
         const topicMap: any = {};
         topics.forEach((t: any) => { if (!topicMap[t.topic]) topicMap[t.topic] = []; topicMap[t.topic].push(t.score); });
-        const res = await fetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scores, topics: topicMap }) });
+        const res = await authFetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scores, topics: topicMap }) });
         setPred(await res.json());
       } catch (e) { console.error(e); }
       setLoading(false);
@@ -89,7 +90,7 @@ function ModuleDiveTab({ studentData }: { studentData: any }) {
 
   const analyze = async (idx: number) => {
     setSelectedModule(idx); setLoading(true);
-    try { const res = await fetch('/api/module-dive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modules[idx]) }); setDiveData(await res.json()); } catch { setDiveData(null); }
+    try { const res = await authFetch('/api/module-dive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modules[idx]) }); setDiveData(await res.json()); } catch { setDiveData(null); }
     setLoading(false);
   };
   useEffect(() => { analyze(0); }, []);
@@ -215,7 +216,7 @@ function FlashcardsTab({ studentData }: { studentData: any }) {
   const topicList = Object.entries(topics).map(([topic, scores]: [string, any]) => ({ topic, avg: Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length), count: scores.length })).sort((a, b) => a.avg - b.avg);
   const generate = async (topic: string, score: number) => {
     setSelectedTopic(topic); setLoading(true); setCurrentCard(0); setFlipped({});
-    try { const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, score, context: `Weak topics: ${studentData.weakTopics.join(', ')}. Learning style: ${studentData.learningStyle}` }) }); setCards(await res.json()); } catch { setCards(null); }
+    try { const res = await authFetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, score, context: `Weak topics: ${studentData.weakTopics.join(', ')}. Learning style: ${studentData.learningStyle}` }) }); setCards(await res.json()); } catch { setCards(null); }
     setLoading(false);
   };
   return (
@@ -259,7 +260,7 @@ function StudyPlanTab({ studentData }: { studentData: any }) {
   const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [completed, setCompleted] = useState<any>({});
-  useEffect(() => { async function fetch_() { try { const res = await fetch('/api/study-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weakTopics: studentData.weakTopics, strongTopics: studentData.strongTopics, quizHistory: studentData.quizHistory, avgSessionMinutes: studentData.avgSessionMinutes, learningStyle: studentData.learningStyle }) }); setPlan(await res.json()); } catch (e) { console.error(e); } setLoading(false); } fetch_(); }, []);
+  useEffect(() => { async function fetch_() { try { const res = await authFetch('/api/study-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weakTopics: studentData.weakTopics, strongTopics: studentData.strongTopics, quizHistory: studentData.quizHistory, avgSessionMinutes: studentData.avgSessionMinutes, learningStyle: studentData.learningStyle }) }); setPlan(await res.json()); } catch (e) { console.error(e); } setLoading(false); } fetch_(); }, []);
   if (loading) return <div className="text-center py-12"><svg className="animate-spin h-8 w-8 mx-auto text-blue-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><p className="text-sm text-blue-300">AI is building your personalized study plan...</p></div>;
   if (!plan) return <p className="text-red-400 text-center py-8">Failed to generate plan.</p>;
   const completedCount = Object.values(completed).filter(Boolean).length;
@@ -308,7 +309,7 @@ function AgentVisualizerTab({ studentData }: { studentData: any }) {
   const runOrchestration = async () => {
     setLoading(true); setActiveAgent(0); setData(null);
     try {
-      const res = await fetch('/api/agent-orchestrator', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData) });
+      const res = await authFetch('/api/agent-orchestrator', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData) });
       const result = await res.json();
       for (let i = 0; i < result.agents.length; i++) { setActiveAgent(i); await new Promise(r => setTimeout(r, 800)); }
       setActiveAgent(result.agents.length); setData(result);
@@ -433,12 +434,12 @@ export default function InsightsPage() {
   const fetchWeakness = () => {
     if (weaknessFetched.current) return;
     weaknessFetched.current = true;
-    fetch('/api/weakness-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizHistory: studentData.quizHistory }) })
+    authFetch('/api/weakness-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizHistory: studentData.quizHistory }) })
       .then(r => r.json()).then(setWeaknessData).catch(console.error);
   };
 
   const didFetch = useRef(false);
-  const fetch_ = async () => { setLoading(true); try { const r = await fetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData) }); setIns(await r.json()); } catch (e) { console.error(e); } setLoading(false); };
+  const fetch_ = async () => { setLoading(true); try { const r = await authFetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData) }); setIns(await r.json()); } catch (e) { console.error(e); } setLoading(false); };
   useEffect(() => { if (!dataLoading && !didFetch.current) { didFetch.current = true; fetch_(); } }, [dataLoading]);
 
   const phase = ins?.learningStateAnalysis;

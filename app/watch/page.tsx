@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { authFetch } from '@/lib/api-client';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { QuizModal } from '@/components/QuizModal';
 import { ChatbotModal } from '@/components/ChatbotModal';
@@ -82,7 +83,7 @@ function WatchPageContent() {
     const timeoutId = setTimeout(() => controller.abort(), 90000);
     const promise = (async () => {
       try {
-        const res = await fetch('/api/generate-quiz', {
+        const res = await authFetch('/api/generate-quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ segmentIndex, segmentSlides }),
@@ -157,7 +158,7 @@ function WatchPageContent() {
   }, []);
 
   useEffect(() => {
-    fetch(`/api/segment-slides?moduleId=${encodeURIComponent(moduleId)}`)
+    authFetch(`/api/segment-slides?moduleId=${encodeURIComponent(moduleId)}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data.segmentSlides) && data.segmentSlides.length > 0) {
@@ -241,7 +242,7 @@ function WatchPageContent() {
       const mistakesToSend = merged.length ? merged : undefined;
       setAccumulatedMistakes([]);
       try {
-        const res = await fetch('/api/segment-summary', {
+        const res = await authFetch('/api/segment-summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -297,7 +298,7 @@ function WatchPageContent() {
     setQuizOpen(false);
     setFlashcardLoading(true);
     try {
-      const res = await fetch('/api/generate-segment-flashcards', {
+      const res = await authFetch('/api/generate-segment-flashcards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

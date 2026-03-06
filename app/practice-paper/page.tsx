@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { demoModule } from '@/data/demoModule';
+import { authFetch } from '@/lib/api-client';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -169,7 +170,7 @@ export default function PracticePaperPage() {
         ? selectedSubTopics
         : selectedSegments.map(i => SEGMENTS[i].title);
 
-      const res = await fetch('/api/practice-paper', {
+      const res = await authFetch('/api/practice-paper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

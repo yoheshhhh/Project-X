@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { verifyAuth } from '@/lib/api-auth';
 
 export interface GradeEntry {
   course: string;
@@ -14,20 +15,15 @@ export interface GradeEntry {
 
 /** GET /api/grades — returns grades for the authenticated user. Uses Admin SDK so no Firestore rules change needed. */
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  const idToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!idToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await verifyAuth(req);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!adminDb) {
     return NextResponse.json({ error: 'Grades service unavailable' }, { status: 503 });
   }
 
   try {
-    const admin = await import('firebase-admin');
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded.uid;
+    const uid = authResult.uid;
 
     const snapshot = await adminDb.collection('users').doc(uid).collection('grades').get();
     const entries = snapshot.docs.map((d: { id: string; data: () => Record<string, unknown> }) => ({
@@ -45,10 +41,7 @@ export async function GET(req: Request) {
     const grades = entries.map(({ id: _id, ...e }) => e as GradeEntry);
     return NextResponse.json({ grades });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Unauthorized';
-    if (message.includes('auth/') || message.includes('token')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

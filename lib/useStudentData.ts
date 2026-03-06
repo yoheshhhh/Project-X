@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, onAuthStateChanged, getUserProfile, getAllModuleProgress, getAllSegmentQuizScores, getStudySessions } from './firebase';
+import { authFetch } from './api-client';
 import { computeRetentionRates, computeOverallRetention, computeLearningVelocity, computePredictedScore, computeStudyEfficiency, getReviewDueTopics, computeOptimalStudyTime, computeCognitiveLoad, getCurrentCognitiveLoad, computeWeeklyReport, computeKnowledgeMap } from './learning-algorithms';
 import type { StudySession } from './learning-algorithms';
 
@@ -168,7 +169,7 @@ function attachAlgorithmData(studentData: any) {
 /** Fetch cohort stats from the server API */
 async function fetchCohortStats(): Promise<{ cohortAvg: number | null; top10: number | null; notEnoughData: boolean }> {
   try {
-    const res = await fetch('/api/cohort-stats');
+    const res = await authFetch('/api/cohort-stats');
     if (!res.ok) return { cohortAvg: null, top10: null, notEnoughData: true };
     return await res.json();
   } catch {

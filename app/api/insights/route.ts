@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('InsightsEngine');
 
@@ -134,6 +135,9 @@ async function callAI(prompt: string): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const start = Date.now();
   try {
     const studentData = await request.json();

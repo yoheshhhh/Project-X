@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSegmentTakeaways } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:SegmentSummary');
 
@@ -11,6 +12,9 @@ const log = logger.child('API:SegmentSummary');
  * Returns: { bullets: string[], oneThing: string }
  */
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAuth(request);
+  if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const body = await request.json();
     const { topic, segmentIndex, segmentSlides, mistakes } = body;

@@ -3,6 +3,7 @@
 import AuthGuard from '@/components/AuthGuard';
 import { useState, useEffect, useCallback } from 'react';
 import { useStudentData } from '@/lib/useStudentData';
+import { authFetch } from '@/lib/api-client';
 import { auth, saveStudyProfile, getStudyProfile, findStudyMatches, getCommunityPosts, createCommunityPost, addPostReply, votePost } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -308,7 +309,7 @@ export default function CommunityPage() {
 
     let aiBody = 'Try breaking this problem into smaller parts. Review the lecture materials for this topic and practice with simple examples first.';
     try {
-      const res = await fetch('/api/summary', {
+      const res = await authFetch('/api/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
