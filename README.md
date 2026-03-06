@@ -28,7 +28,7 @@
 
 ## Overview
 
-NTUlearn addresses a critical gap in modern education: despite the abundance of learning data, most students lack clear, actionable insight into their learning journey. Our platform models each student's evolving learning state through a **Learner DNA Profile**, delivers content through an adaptive **Micro-Learning Engine**, and provides personalized AI-powered guidance via **Gemini** and **OpenAI**.
+NTUlearn addresses a critical gap in modern education: despite the abundance of learning data, most students lack clear, actionable insight into their learning journey. Our platform models each student's evolving learning state through a **Learner DNA Profile**, delivers content through an adaptive **Micro-Learning Engine**, and provides personalized AI-powered guidance via **OpenAI GPT-4o-mini**.
 
 ### Problem We Solve
 
@@ -133,11 +133,11 @@ A 6-pillar adaptive learning system:
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────┬──────┘│
 └───────┼────────────┼────────────┼───────────────┼────────┘
         │            │            │               │
-   ┌────┴────┐  ┌────┴────┐  ┌───┴────┐   ┌──────┴──────┐
-   │ OpenAI  │  │ Gemini  │  │ Custom │   │  Rule-based │
-   │ GPT-4o  │  │  2.0    │  │ Linear │   │  Algorithms │
-   │  mini   │  │  Flash  │  │ Regres.│   │  (SM-2, etc)│
-   └─────────┘  └─────────┘  └────────┘   └─────────────┘
+   ┌────┴────┐              ┌───┴────┐   ┌──────┴──────┐
+   │ OpenAI  │              │ Custom │   │  Rule-based │
+   │ GPT-4o  │              │ Linear │   │  Algorithms │
+   │  mini   │              │ Regres.│   │  (SM-2, etc)│
+   └─────────┘              └────────┘   └─────────────┘
                         │
    ┌────────────────────┴──────────────────────────┐
    │          FIREBASE (Auth + Firestore)           │
@@ -158,8 +158,7 @@ A 6-pillar adaptive learning system:
 | Charts | Recharts 2 | Dashboard visualizations |
 | Auth | Firebase Auth | Email/password authentication |
 | Database | Cloud Firestore | Real-time NoSQL document store |
-| AI (Primary) | OpenAI GPT-4o-mini | Flashcards, quiz explanations, practice papers, chat |
-| AI (Secondary) | Gemini 2.0 Flash | Insights analysis, burnout recommendations, study plans |
+| AI | OpenAI GPT-4o-mini | Flashcards, quiz explanations, practice papers, chat, insights, burnout, study plans |
 | Algorithms | Custom (Pure JS) | Linear Regression, SM-2, Ebbinghaus, variance analysis |
 | RAG | pdf-parse + embeddings | Document retrieval for context-aware tutoring |
 | Deployment | Firebase Hosting | Production deployment |
@@ -176,7 +175,6 @@ A 6-pillar adaptive learning system:
 - **npm 9+** (check with `npm -v`)
 - A Firebase project
 - An OpenAI API key
-- A Google Gemini API key
 
 ### Step 1: Clone & Install
 
@@ -225,15 +223,6 @@ Edit `.env.local` with your credentials (see steps below).
 3. Add to `.env.local`:
    ```
    OPENAI_API_KEY=sk-...
-   ```
-
-### Step 5: Gemini API Setup
-
-1. Go to [Google AI Studio](https://aistudio.google.com/)
-2. Click "Get API key" → "Create API key"
-3. Add to `.env.local`:
-   ```
-   GEMINI_API_KEY=...
    ```
 
 ---
@@ -334,8 +323,6 @@ Project-X/
 │   ├── firebase-admin.ts         # Firebase Admin SDK
 │   ├── firebaseClient.ts         # Firestore client helpers
 │   ├── openai-ai.ts              # OpenAI integration
-│   ├── gemini-ai.ts              # Gemini AI integration
-│   ├── azure-ai.ts               # Azure OpenAI (fallback)
 │   ├── ai-help.ts                # AI helper utilities
 │   ├── rag.ts                    # RAG retrieval for tutoring
 │   ├── learning-algorithms.ts    # Ebbinghaus, cognitive load
@@ -564,30 +551,28 @@ Multi-agent pipeline with 5 specialized AI agents.
 | Person 1 Narhen | Architect | Project setup, integration, dashboard, docs |
 | Person 2 Yoheshvaran | Gatekeeper | Login, SSO simulation, Learner DNA quiz |
 | Person 3 Arunkumar | Content Engine | Video player, quiz gates, "I'm Lost" button |
-| Person 4 Nandakishor | AI Brain | Gemini & OpenAI integrations, API routes |
+| Person 4 Nandakishor | AI Brain | OpenAI integrations, API routes |
 | Person 5 Pranati | Dashboard Designer | Progress tracking, charts, peer comparison |
 
 ---
 
 ## Citations
 
-[1] Google Gemini API Documentation. https://ai.google.dev/docs
+[1] OpenAI API Documentation. https://platform.openai.com/docs
 
-[2] OpenAI API Documentation. https://platform.openai.com/docs
+[2] Firebase Documentation. Google. https://firebase.google.com/docs
 
-[3] Firebase Documentation. Google. https://firebase.google.com/docs
+[3] Next.js Documentation. Vercel. https://nextjs.org/docs
 
-[4] Next.js Documentation. Vercel. https://nextjs.org/docs
+[4] Tailwind CSS Documentation. https://tailwindcss.com/docs
 
-[5] Tailwind CSS Documentation. https://tailwindcss.com/docs
+[5] Ebbinghaus, H. (1885). "Memory: A Contribution to Experimental Psychology." — Foundational work on the forgetting curve, informing our spaced repetition features.
 
-[6] Ebbinghaus, H. (1885). "Memory: A Contribution to Experimental Psychology." — Foundational work on the forgetting curve, informing our spaced repetition features.
+[6] Wozniak, P.A. (1990). "SuperMemo 2 Algorithm." — Basis for our SM-2 flashcard scheduling implementation.
 
-[7] Wozniak, P.A. (1990). "SuperMemo 2 Algorithm." — Basis for our SM-2 flashcard scheduling implementation.
+[7] Recharts Documentation. https://recharts.org
 
-[8] Recharts Documentation. https://recharts.org
-
-[9] Framer Motion Documentation. https://www.framer.com/motion
+[8] Framer Motion Documentation. https://www.framer.com/motion
 
 ---
 

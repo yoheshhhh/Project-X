@@ -1,5 +1,5 @@
 /**
- * OpenAI-backed AI helpers (replaces Gemini for quiz, summary, flashcards, etc.).
+ * OpenAI-backed AI helpers (quiz, summary, flashcards, etc.).
  * Uses OPENAI_API_KEY (and optional OPENAI_API_KEY_2 for rotation).
  */
 
@@ -59,7 +59,7 @@ async function callOpenAI(prompt: string, options?: { maxTokens?: number; system
   throw new Error('OpenAI rate limited or unavailable');
 }
 
-// ─── Same exports as gemini-ai (drop-in replacement) ─────────────────────
+// ─── AI helper exports ───────────────────────────────────────────────────
 
 export async function generateFlashcards(topic: string, weakAreas: string[]) {
   const prompt = `Generate 5 flashcards for a university student studying ${topic}. Focus on: ${weakAreas.join(', ')}. Return ONLY valid JSON array: [{"front":"question","back":"answer","difficulty":"easy|medium|hard"}]`;

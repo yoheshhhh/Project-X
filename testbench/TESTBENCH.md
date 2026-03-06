@@ -84,11 +84,6 @@ Edit `.env.local` and fill in the following keys:
 2. Create a new secret key
 3. Add: `OPENAI_API_KEY=sk-...`
 
-#### Gemini Key
-1. Go to [Google AI Studio](https://aistudio.google.com/)
-2. Click "Get API key" → "Create API key"
-3. Add: `GEMINI_API_KEY=AIza...`
-
 ### 3. Start the Server
 
 ```bash
@@ -316,8 +311,7 @@ npm run dev
 
 ### AI features return errors
 - Verify `OPENAI_API_KEY` is set and has credits
-- Verify `GEMINI_API_KEY` is set and enabled
-- Check network connectivity to api.openai.com and generativelanguage.googleapis.com
+- Check network connectivity to api.openai.com
 
 ### Build fails with type errors
 ```bash

@@ -111,7 +111,7 @@ export function QuizModal({
           </p>
           {(errorMessage ?? '').toLowerCase().includes('rate limit') && (
             <p className="text-slate-500 text-xs mb-3">
-              Quiz uses Gemini; 429 means your API key’s quota is exceeded. Wait 1–2 minutes or check quota in Google AI Studio.
+              Quiz uses OpenAI; 429 means your API key’s quota is exceeded. Wait 1–2 minutes or check your quota.
             </p>
           )}
           <button

@@ -16,7 +16,7 @@ function getOpenAI(): OpenAI {
 // ─────────────────────────────────────────────────────────────────────────────
 // Guardian AI Tutor — /api/tutor
 // 1:1 port of Pranati's ai_engine.py (dashboard_final.zip)
-// Same prompt, same data extraction, same model (gemini-2.5-flash)
+// Same prompt, same data extraction, ported to OpenAI GPT-4o-mini
 // ─────────────────────────────────────────────────────────────────────────────
 
 /* ── analyze_performance (exact copy of Pranati's Python function) ───── */

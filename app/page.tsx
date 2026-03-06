@@ -39,7 +39,7 @@ export default function Home() {
 
         {/* Feature Pills */}
         <div className="flex flex-wrap justify-center gap-3 mt-12">
-          {['AI-Powered', 'Adaptive Learning', 'NTU SSO', 'Azure AI', 'Micro-Learning'].map((f) => (
+          {['AI-Powered', 'Adaptive Learning', 'NTU SSO', 'OpenAI', 'Micro-Learning'].map((f) => (
             <span key={f} className="bg-white/5 border border-white/10 text-slate-400 text-xs px-3 py-1.5 rounded-full">
               {f}
             </span>

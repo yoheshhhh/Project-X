@@ -22,7 +22,7 @@ function hashText(s: string): string {
   return crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
 }
 
-/** Load pre-generated quiz for a segment (used when Gemini returns 429). */
+/** Load pre-generated quiz for a segment (used when AI returns 429). */
 async function loadFallback(segmentIndex: number): Promise<CachedQuiz> {
   const file = path.join(process.cwd(), 'data', 'quizzes', `segment-${segmentIndex}.json`);
   const raw = await fs.readFile(file, 'utf-8');
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     log.error('Quiz generation failed', { error: message });
     const isConfig = typeof message === 'string' && (
       message.includes('not configured') ||
-      message.includes('GEMINI') ||
+      message.includes('OPENAI') ||
       message.includes('API_KEY')
     );
     // On 429: serve fallback quiz so UI loads instantly without failing

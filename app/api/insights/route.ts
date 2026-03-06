@@ -279,7 +279,7 @@ Respond ONLY with valid JSON (no backticks):
         optimalTime: aiData?.optimalTimeAdvice || fallback.optimalTimeAdvice,
         velocity: aiData?.velocityAdvice || fallback.velocityAdvice,
       },
-      meta: { analysisTimeMs: Date.now() - start, rulesApplied: signals.length, aiModel: aiData ? 'gemini-2.0-flash' : 'rule-engine-fallback', dataPointsAnalyzed: (studentData.quizHistory?.length || 0) + (studentData.weeklyHoursHistory?.length || 0) + (studentData.loginFrequency?.length || 0), featuresComputed: 6, aiAvailable: !!aiData },
+      meta: { analysisTimeMs: Date.now() - start, rulesApplied: signals.length, aiModel: aiData ? 'gpt-4o-mini' : 'rule-engine-fallback', dataPointsAnalyzed: (studentData.quizHistory?.length || 0) + (studentData.weeklyHoursHistory?.length || 0) + (studentData.loginFrequency?.length || 0), featuresComputed: 6, aiAvailable: !!aiData },
     };
 
     log.info('Analysis complete', { timeMs: merged.meta.analysisTimeMs, aiAvailable: merged.meta.aiAvailable });

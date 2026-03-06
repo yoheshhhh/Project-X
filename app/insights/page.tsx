@@ -360,7 +360,7 @@ function AgentVisualizerTab({ studentData }: { studentData: any }) {
         {loading && activeAgent >= 0 && activeAgent < 5 && (
           <div className="mt-6 p-3 rounded-xl border flex items-center gap-3" style={{ backgroundColor: agents[activeAgent].color + '10', borderColor: agents[activeAgent].color + '30' }}>
             <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: agents[activeAgent].color }} />
-            <p className="text-sm" style={{ color: agents[activeAgent].color }}>{['Analyzing quiz scores and identifying knowledge gaps...', 'Detecting careless errors vs genuine weaknesses using variance analysis...', 'Running Ordinary Least Squares Linear Regression for score prediction...', 'Building personalized study plan using Gemini AI...', 'Generating personalized guidance with empathy and clarity...'][activeAgent]}</p>
+            <p className="text-sm" style={{ color: agents[activeAgent].color }}>{['Analyzing quiz scores and identifying knowledge gaps...', 'Detecting careless errors vs genuine weaknesses using variance analysis...', 'Running Ordinary Least Squares Linear Regression for score prediction...', 'Building personalized study plan using AI...', 'Generating personalized guidance with empathy and clarity...'][activeAgent]}</p>
           </div>
         )}
         {data && !loading && (<div className="mt-6 p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-green-500" /><p className="text-sm text-green-400">Pipeline complete — 5 agents executed in {data.orchestration.totalTimeMs}ms</p></div>)}
@@ -401,7 +401,7 @@ function AgentVisualizerTab({ studentData }: { studentData: any }) {
             <div className="p-3 bg-white/5 rounded-xl text-center"><p className="text-xl font-extrabold text-violet-400">Sequential</p><p className="text-xs text-slate-500">Pipeline</p></div>
             <div className="p-3 bg-white/5 rounded-xl text-center"><p className="text-xl font-extrabold text-amber-400">Maker-Checker</p><p className="text-xs text-slate-500">Validation</p></div>
           </div>
-          <div className="p-3 bg-white/5 rounded-xl"><p className="text-xs text-slate-400 font-mono">Student Data → Diagnosis (statistical) → Pattern Detection (variance) → Prediction (OLS regression) → Planner (Gemini AI) → Tutor (Gemini AI) → Output</p></div>
+          <div className="p-3 bg-white/5 rounded-xl"><p className="text-xs text-slate-400 font-mono">Student Data → Diagnosis (statistical) → Pattern Detection (variance) → Prediction (OLS regression) → Planner (OpenAI) → Tutor (OpenAI) → Output</p></div>
           <p className="text-xs text-slate-500 mt-3">{data.orchestration.description}</p>
         </div>
       )}

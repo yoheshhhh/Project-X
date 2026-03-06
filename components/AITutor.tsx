@@ -221,7 +221,7 @@ export default function AITutor() {
           <span className="text-xl">🛡️</span>
           <div>
             <p className="text-sm font-bold text-white">Guardian AI Tutor</p>
-            <p className="text-xs text-blue-300">SC3010 Computer Security · Powered by Gemini</p>
+            <p className="text-xs text-blue-300">SC3010 Computer Security · Powered by OpenAI</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
