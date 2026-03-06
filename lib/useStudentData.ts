@@ -63,8 +63,8 @@ const MOCK_DASHBOARD_DATA: any = {
     { quiz: 'M1 S1', score: 90 }, { quiz: 'M1 S2', score: 85 }, { quiz: 'M1 S3', score: 95 },
     { quiz: 'M2 S1', score: 80 }, { quiz: 'M2 S2', score: 85 }, { quiz: 'M3 S1', score: 70 },
   ],
-  peerComparison: { you: 78, cohortAvg: 65, top10: 92 },
-  burnout: { riskLevel: 'low', riskScore: 15, signals: [], breakdown: [], recommendation: 'Your study patterns look healthy! Keep it up.', schedule: null, weeklyTip: '', mentalHealthResources: [] },
+  peerComparison: { you: 78, cohortAvg: null, top10: null },
+  burnout: null,
   flashcardsGenerated: 24,
   practiceQuestionsAttempted: 47,
   imLostClicks: 3,
@@ -165,8 +165,19 @@ function attachAlgorithmData(studentData: any) {
   studentData.knowledgeMap = computeKnowledgeMap(quizHistory, retentionRates);
 }
 
+/** Fetch cohort stats from the server API */
+async function fetchCohortStats(): Promise<{ cohortAvg: number | null; top10: number | null; notEnoughData: boolean }> {
+  try {
+    const res = await fetch('/api/cohort-stats');
+    if (!res.ok) return { cohortAvg: null, top10: null, notEnoughData: true };
+    return await res.json();
+  } catch {
+    return { cohortAvg: null, top10: null, notEnoughData: true };
+  }
+}
+
 /** Read localStorage progress and build real data from it (works for demo user without Firebase Auth) */
-function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } | null {
+function buildDataFromLocalStorage(cohortStats?: { cohortAvg: number | null; top10: number | null }): { studentData: any; dashboardData: any } | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem('lams_progress');
@@ -222,7 +233,7 @@ function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } |
       ...MOCK_DASHBOARD_DATA,
       modules: dashModules,
       quizScores: quizScoresList.slice(0, 10),
-      peerComparison: { you: avgScore, cohortAvg: 65, top10: 92 },
+      peerComparison: { you: avgScore, cohortAvg: cohortStats?.cohortAvg ?? null, top10: cohortStats?.top10 ?? null },
       practiceQuestionsAttempted: quizHistory.length,
     };
 
@@ -274,7 +285,8 @@ export function useStudentData() {
           if (cancelled || gotAuthUser) return; // auth resolved while we waited
         }
         // Truly no user — use localStorage for demo
-        const local = buildDataFromLocalStorage();
+        const cohortStats = await fetchCohortStats();
+        const local = buildDataFromLocalStorage(cohortStats);
         if (local) {
           setStudentData(local.studentData);
           setDashboardData(local.dashboardData);
@@ -291,18 +303,19 @@ export function useStudentData() {
         // Fetch each independently so one failure doesn't kill all
         const failures: string[] = [];
         const safe = (p: Promise<any>, label: string) => p.catch((e: any) => { failures.push(`${label}: ${e.message}`); return null; });
-        const [profile, moduleProgress, quizScores, sessions] = await Promise.all([
+        const [profile, moduleProgress, quizScores, sessions, cohortStats] = await Promise.all([
           safe(getUserProfile(user.uid), 'getUserProfile'),
           safe(getAllModuleProgress(user.uid), 'getAllModuleProgress').then(r => r || []),
           safe(getAllSegmentQuizScores(user.uid), 'getAllSegmentQuizScores').then(r => r || []),
           safe(getStudySessions(user.uid), 'getStudySessions').then(r => r || []),
+          safe(fetchCohortStats(), 'fetchCohortStats').then(r => r || { cohortAvg: null, top10: null, notEnoughData: true }),
         ]);
 
         if (cancelled) return;
 
         // Need at least 1 quiz score to use real Firestore data; fall back to localStorage
         if (quizScores.length < 1) {
-          const local = buildDataFromLocalStorage();
+          const local = buildDataFromLocalStorage(cohortStats);
           if (local) {
             setStudentData(local.studentData);
             setDashboardData(local.dashboardData);
@@ -431,8 +444,8 @@ export function useStudentData() {
           modules: dashModules,
           weeklyHours,
           quizScores: quizScoresList.slice(0, 10),
-          peerComparison: { you: avgScore, cohortAvg: 65, top10: 92 },
-          burnout: MOCK_DASHBOARD_DATA.burnout,
+          peerComparison: { you: avgScore, cohortAvg: cohortStats?.cohortAvg ?? null, top10: cohortStats?.top10 ?? null },
+          burnout: null,
           flashcardsGenerated: profile?.flashcardsReviewed || 0,
           practiceQuestionsAttempted: quizScores.length,
           imLostClicks: profile?.imLostClicks || 0,
@@ -445,7 +458,8 @@ export function useStudentData() {
         _cache = { studentData: realStudentData, dashboardData: realDashboardData, isRealData: true, uid: user.uid, timestamp: Date.now() };
       } catch (err) {
         console.error('useStudentData: failed to fetch Firestore data, trying localStorage', err);
-        const local = buildDataFromLocalStorage();
+        const fallbackCohort = await fetchCohortStats().catch(() => ({ cohortAvg: null, top10: null, notEnoughData: true }));
+        const local = buildDataFromLocalStorage(fallbackCohort);
         if (local && !cancelled) {
           setStudentData(local.studentData);
           setDashboardData(local.dashboardData);

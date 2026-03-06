@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStudentData, detectPhase } from '@/lib/useStudentData';
 import { auth, saveStudyGoal, getStudyGoals, updateStudyGoal, deleteStudyGoal } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -31,6 +31,20 @@ export default function DashboardPage() {
   const data = dashboardData;
   const [burnout, setBurnout] = useState<any>(data.burnout);
   const [burnoutLoading, setBurnoutLoading] = useState(false);
+  const [burnoutChecked, setBurnoutChecked] = useState(false);
+
+  // Sync burnout when dashboardData changes
+  useEffect(() => {
+    setBurnout(data.burnout);
+  }, [data.burnout]);
+
+  // Auto-run burnout check when real data loads
+  useEffect(() => {
+    if (isRealData && !burnoutChecked && !dataLoading) {
+      setBurnoutChecked(true);
+      checkBurnoutRef.current();
+    }
+  }, [isRealData, burnoutChecked, dataLoading]);
 
   // Client-side phase detection for adaptive greeting
   const { phase } = detectPhase(studentData);
@@ -57,6 +71,9 @@ export default function DashboardPage() {
     } catch { setBurnout({ riskLevel: 'moderate', riskScore: 45, signals: ['Late night studying', 'Declining scores'], breakdown: [], recommendation: 'Consider taking a break.', schedule: null, weeklyTip: 'Try sleeping before midnight tonight.', mentalHealthResources: [] }); }
     setBurnoutLoading(false);
   };
+
+  const checkBurnoutRef = useRef(checkBurnout);
+  checkBurnoutRef.current = checkBurnout;
 
   const overallProgress = Math.round(data.modules.reduce((sum, m) => sum + m.progress, 0) / data.modules.length);
 
@@ -522,23 +539,30 @@ export default function DashboardPage() {
             {/* Peer Comparison */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">👥 Anonymous Peer Comparison</h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'Your Score', value: data.peerComparison.you, color: '#3b82f6' },
-                  { label: 'Cohort Average', value: data.peerComparison.cohortAvg, color: '#6b7280' },
-                  { label: 'Top 10%', value: data.peerComparison.top10, color: '#22c55e' },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300">{item.label}</span>
-                      <span className="font-bold text-white">{item.value}%</span>
+              {data.peerComparison.cohortAvg == null || data.peerComparison.top10 == null ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-400">Not enough cohort data yet.</p>
+                  <p className="text-xs text-slate-500 mt-1">Peer comparison will appear once more students complete quizzes.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[
+                    { label: 'Your Score', value: data.peerComparison.you, color: '#3b82f6' },
+                    { label: 'Cohort Average', value: data.peerComparison.cohortAvg, color: '#6b7280' },
+                    { label: 'Top 10%', value: data.peerComparison.top10, color: '#22c55e' },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-slate-300">{item.label}</span>
+                        <span className="font-bold text-white">{item.value}%</span>
+                      </div>
+                      <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
+                      </div>
                     </div>
-                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-slate-500 mt-3">📊 All comparisons are anonymous. No individual data is shared.</p>
             </div>
 
@@ -550,7 +574,7 @@ export default function DashboardPage() {
                   {burnoutLoading ? '⏳ AI analyzing...' : '🔄 Check Now'}
                 </button>
               </div>
-              {burnoutLoading ? (
+              {burnoutLoading || !burnout ? (
                 <div className="text-center py-6">
                   <svg className="animate-spin h-8 w-8 mx-auto text-violet-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                   <p className="text-sm text-violet-300">AI is analyzing your study patterns...</p>

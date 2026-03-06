@@ -13,7 +13,7 @@
 
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, orderBy, addDoc, increment, limit as fsLimit } from 'firebase/firestore';
 
 import { logger } from './logger';
 
@@ -352,6 +352,72 @@ export async function saveAdaptiveDifficulty(uid: string, moduleId: string, data
     ...data,
     updatedAt: serverTimestamp(),
   }, { merge: true });
+}
+
+// ---- Community Posts ----
+
+export async function getCommunityPosts(maxPosts = 20) {
+  try {
+    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), fsLimit(maxPosts));
+    const snap = await getDocs(q);
+    const posts: any[] = [];
+    for (const d of snap.docs) {
+      const post = { id: d.id, ...d.data() };
+      try {
+        const repliesSnap = await getDocs(
+          query(collection(db, 'posts', d.id, 'replies'), orderBy('createdAt', 'asc'))
+        );
+        (post as any).replies = repliesSnap.docs.map(r => ({ id: r.id, ...r.data() }));
+      } catch {
+        (post as any).replies = [];
+      }
+      posts.push(post);
+    }
+    return posts;
+  } catch (e) {
+    console.error('getCommunityPosts failed:', e);
+    return [];
+  }
+}
+
+export async function createCommunityPost(uid: string, postData: {
+  title: string;
+  body: string;
+  author: string;
+  anonymous: boolean;
+  module: string;
+  topic: string;
+  studyGroup: any | null;
+}) {
+  const ref = await addDoc(collection(db, 'posts'), {
+    uid,
+    ...postData,
+    upvotes: 0,
+    downvotes: 0,
+    solved: false,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function addPostReply(postId: string, uid: string, replyData: {
+  author: string;
+  body: string;
+  isAI: boolean;
+}) {
+  const ref = await addDoc(collection(db, 'posts', postId, 'replies'), {
+    uid,
+    ...replyData,
+    upvotes: 0,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function votePost(postId: string, direction: 'up' | 'down') {
+  const docRef = doc(db, 'posts', postId);
+  const field = direction === 'up' ? 'upvotes' : 'downvotes';
+  await updateDoc(docRef, { [field]: increment(1) });
 }
 
 // ---- Types ----

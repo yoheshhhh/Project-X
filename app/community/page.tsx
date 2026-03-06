@@ -3,12 +3,23 @@
 import AuthGuard from '@/components/AuthGuard';
 import { useState, useEffect, useCallback } from 'react';
 import { useStudentData } from '@/lib/useStudentData';
-import { auth, saveStudyProfile, getStudyProfile, findStudyMatches } from '@/lib/firebase';
+import { auth, saveStudyProfile, getStudyProfile, findStudyMatches, getCommunityPosts, createCommunityPost, addPostReply, votePost } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
-const mockPosts = [
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+}
+
+const SEED_POSTS = [
   {
-    id: 1,
+    id: 'seed-1',
     title: 'How do nested if-else statements work?',
     body: 'I keep getting confused with the indentation and which else belongs to which if. Can someone explain with a simple example?',
     author: 'Anonymous Owl',
@@ -18,27 +29,15 @@ const mockPosts = [
     upvotes: 12,
     downvotes: 1,
     replies: [
-      {
-        id: 'r1',
-        author: 'Arun M.',
-        body: 'Think of it like nesting boxes. Each if opens a box, and the else closes the nearest open box. Indentation helps you see which box you are in!',
-        upvotes: 8,
-        isAI: false,
-      },
-      {
-        id: 'r2',
-        author: '🤖 AI Tutor',
-        body: 'Great question! Nested if-else works from the inside out. The innermost if-else pair resolves first. Think of it like Russian nesting dolls — each doll (if) has its own matching lid (else). A tip: always use curly braces {} even for single-line blocks to avoid confusion.',
-        upvotes: 5,
-        isAI: true,
-      },
+      { id: 'r1', author: 'Arun M.', body: 'Think of it like nesting boxes. Each if opens a box, and the else closes the nearest open box. Indentation helps you see which box you are in!', upvotes: 8, isAI: false },
+      { id: 'r2', author: '🤖 AI Tutor', body: 'Great question! Nested if-else works from the inside out. The innermost if-else pair resolves first. Think of it like Russian nesting dolls — each doll (if) has its own matching lid (else). A tip: always use curly braces {} even for single-line blocks to avoid confusion.', upvotes: 5, isAI: true },
     ],
     solved: true,
     timestamp: '2 hours ago',
     studyGroup: null,
   },
   {
-    id: 2,
+    id: 'seed-2',
     title: 'Anyone want to study loops together before the quiz?',
     body: 'I am struggling with for vs while loops. Looking for 2-3 people to do a study session tomorrow evening around 7pm. We can meet at The Hive or do it on Zoom.',
     author: 'Pranati S.',
@@ -56,7 +55,7 @@ const mockPosts = [
     studyGroup: { date: 'Tomorrow 7pm', location: 'The Hive L3 / Zoom', spots: 4, joined: 2 },
   },
   {
-    id: 3,
+    id: 'seed-3',
     title: 'What is the difference between break and continue?',
     body: 'Both seem to skip something in loops but I cannot figure out when to use which one.',
     author: 'Anonymous Fox',
@@ -66,20 +65,14 @@ const mockPosts = [
     upvotes: 9,
     downvotes: 0,
     replies: [
-      {
-        id: 'r5',
-        author: '🤖 AI Tutor',
-        body: 'Break exits the entire loop immediately — like walking out of a movie theater. Continue skips just the current iteration and moves to the next one — like fast-forwarding past one scene but keeping watching. Use break when you have found what you need. Use continue when you want to skip certain items but keep processing the rest.',
-        upvotes: 7,
-        isAI: true,
-      },
+      { id: 'r5', author: '🤖 AI Tutor', body: 'Break exits the entire loop immediately — like walking out of a movie theater. Continue skips just the current iteration and moves to the next one — like fast-forwarding past one scene but keeping watching. Use break when you have found what you need. Use continue when you want to skip certain items but keep processing the rest.', upvotes: 7, isAI: true },
     ],
     solved: true,
     timestamp: '1 day ago',
     studyGroup: null,
   },
   {
-    id: 4,
+    id: 'seed-4',
     title: 'Study group for Module 3: Functions',
     body: 'Starting Module 3 next week. Want to form a weekly study group to go through it together. Planning to meet every Wednesday at 6pm.',
     author: 'Narhen K.',
@@ -99,12 +92,13 @@ const modules = ['All', 'SC1003', 'SC1005', 'SC2006', 'MH1812'];
 const topics = ['All', 'Control Structures', 'Loops', 'Functions', 'Arrays', 'Recursion'];
 
 export default function CommunityPage() {
-  const [posts, setPosts] = useState<any[]>(mockPosts);
+  const [posts, setPosts] = useState<any[]>(SEED_POSTS);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [filterModule, setFilterModule] = useState('All');
   const [filterTopic, setFilterTopic] = useState('All');
   const [showNew, setShowNew] = useState(false);
-  const [showReplying, setShowReplying] = useState<number | null>(null);
-  const [expandedPost, setExpandedPost] = useState<number | null>(null);
+  const [showReplying, setShowReplying] = useState<string | number | null>(null);
+  const [expandedPost, setExpandedPost] = useState<string | number | null>(null);
   const [voted, setVoted] = useState<Record<string, boolean>>({});
 
   // Study Matcher state
@@ -175,7 +169,28 @@ export default function CommunityPage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) loadMatcherData();
+      if (user) {
+        loadMatcherData();
+        // Try to load Firestore posts in background; seed posts always visible
+        getCommunityPosts()
+          .then((firestorePosts) => {
+            if (!firestorePosts || firestorePosts.length === 0) return;
+            const formatted = firestorePosts.map((p: any) => ({
+              ...p,
+              upvotes: p.upvotes ?? 0,
+              downvotes: p.downvotes ?? 0,
+              replies: (p.replies || []).map((r: any) => ({ ...r, upvotes: r.upvotes ?? 0 })),
+              timestamp: p.createdAt?.toDate
+                ? formatTimeAgo(p.createdAt.toDate())
+                : p.createdAt?.seconds
+                ? formatTimeAgo(new Date(p.createdAt.seconds * 1000))
+                : 'Just now',
+            }));
+            const firestoreIds = new Set(formatted.map((p: any) => p.id));
+            setPosts([...formatted, ...SEED_POSTS.filter(p => !firestoreIds.has(p.id))]);
+          })
+          .catch(() => { /* keep seed posts */ });
+      }
     });
     return () => unsub();
   }, [loadMatcherData]);
@@ -196,7 +211,7 @@ export default function CommunityPage() {
   const [replyAnonymous, setReplyAnonymous] = useState(false);
 
   // AI reply
-  const [aiLoading, setAiLoading] = useState<number | null>(null);
+  const [aiLoading, setAiLoading] = useState<string | number | null>(null);
 
   const filtered = posts.filter((p) => {
     if (filterModule !== 'All' && p.module !== filterModule) return false;
@@ -204,12 +219,13 @@ export default function CommunityPage() {
     return true;
   });
 
-  const handleVote = (postId: number, type: 'up' | 'down') => {
+  const handleVote = async (postId: string | number, type: 'up' | 'down') => {
     const key = `${postId}-${type}`;
     if (voted[key]) return;
 
     setVoted((prev) => ({ ...prev, [key]: true }));
 
+    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id !== postId) return p;
@@ -217,26 +233,38 @@ export default function CommunityPage() {
         return { ...p, [field]: (p[field] ?? 0) + 1 };
       })
     );
+
+    try {
+      await votePost(String(postId), type);
+    } catch (e) {
+      console.error('Failed to vote:', e);
+    }
   };
 
-  const handleNewPost = () => {
-    const post = {
-      id: posts.length + 1,
+  const handleNewPost = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const authorName = isAnonymous
+      ? 'Anonymous ' + ['Owl', 'Fox', 'Tiger', 'Panda', 'Eagle'][Math.floor(Math.random() * 5)]
+      : user.displayName || 'You';
+    const postData = {
       title: newTitle,
       body: newBody,
-      author: isAnonymous ? 'Anonymous ' + ['Owl', 'Fox', 'Tiger', 'Panda', 'Eagle'][Math.floor(Math.random() * 5)] : 'You',
+      author: authorName,
       anonymous: isAnonymous,
       module: newModule,
       topic: newTopic,
-      upvotes: 0,
-      downvotes: 0,
-      replies: [],
-      solved: false,
-      timestamp: 'Just now',
       studyGroup: isStudyGroup ? { date: groupDate, location: groupLocation, spots: groupSpots, joined: 1 } : null,
     };
 
-    setPosts((prev) => [post, ...prev]);
+    try {
+      const newId = await createCommunityPost(user.uid, postData);
+      // Optimistically add to UI
+      setPosts((prev) => [{ id: newId, ...postData, upvotes: 0, downvotes: 0, replies: [], solved: false, timestamp: 'Just now' }, ...prev]);
+    } catch (e) {
+      console.error('Failed to create post:', e);
+    }
+
     setShowNew(false);
     setNewTitle('');
     setNewBody('');
@@ -247,28 +275,38 @@ export default function CommunityPage() {
     setGroupSpots(4);
   };
 
-  const handleReply = (postId: number) => {
-    const reply = {
-      id: 'r' + Date.now(),
-      author: replyAnonymous ? 'Anonymous ' + ['Deer', 'Wolf', 'Bear'][Math.floor(Math.random() * 3)] : 'You',
+  const handleReply = async (postId: string | number) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const authorName = replyAnonymous
+      ? 'Anonymous ' + ['Deer', 'Wolf', 'Bear'][Math.floor(Math.random() * 3)]
+      : user.displayName || 'You';
+    const replyData = {
+      author: authorName,
       body: replyText,
-      upvotes: 0,
       isAI: false,
     };
 
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, reply] } : p))
-    );
+    try {
+      const replyId = await addPostReply(String(postId), user.uid, replyData);
+      // Optimistically add to UI
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, { id: replyId, ...replyData, upvotes: 0 }] } : p))
+      );
+    } catch (e) {
+      console.error('Failed to add reply:', e);
+    }
 
     setReplyText('');
     setShowReplying(null);
     setReplyAnonymous(false);
   };
 
-  const handleAIReply = async (postId: number) => {
-    setAiLoading(postId);
+  const handleAIReply = async (postId: string | number) => {
+    setAiLoading(postId as any);
     const post = posts.find((p) => p.id === postId);
 
+    let aiBody = 'Try breaking this problem into smaller parts. Review the lecture materials for this topic and practice with simple examples first.';
     try {
       const res = await fetch('/api/summary', {
         method: 'POST',
@@ -280,44 +318,31 @@ export default function CommunityPage() {
           timestamp: 'community',
         }),
       });
-
       const data = await res.json();
+      if (data.summary) aiBody = data.summary;
+    } catch { /* use fallback */ }
 
-      const aiReply = {
-        id: 'ai' + Date.now(),
-        author: '🤖 AI Tutor',
-        body:
-          data.summary ||
-          'I can help with this! The key concept here involves understanding the fundamentals step by step. Try breaking the problem into smaller parts.',
-        upvotes: 0,
-        isAI: true,
-      };
-
+    const replyData = { author: '🤖 AI Tutor', body: aiBody, isAI: true };
+    try {
+      const replyId = await addPostReply(String(postId), 'ai-tutor', replyData);
       setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, aiReply] } : p))
+        prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, { id: replyId, ...replyData, upvotes: 0 }] } : p))
       );
     } catch {
-      const aiReply = {
-        id: 'ai' + Date.now(),
-        author: '🤖 AI Tutor',
-        body: 'Try breaking this problem into smaller parts. Review the lecture materials for this topic and practice with simple examples first.',
-        upvotes: 0,
-        isAI: true,
-      };
-
+      // Fallback: show in UI only
       setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, aiReply] } : p))
+        prev.map((p) => (p.id === postId ? { ...p, replies: [...p.replies, { id: 'ai' + Date.now(), ...replyData, upvotes: 0 }] } : p))
       );
     }
 
     setAiLoading(null);
   };
 
-  const toggleSolved = (postId: number) => {
+  const toggleSolved = (postId: string | number) => {
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, solved: !p.solved } : p)));
   };
 
-  const joinStudyGroup = (postId: number) => {
+  const joinStudyGroup = (postId: string | number) => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id !== postId || !p.studyGroup) return p;
@@ -773,7 +798,14 @@ export default function CommunityPage() {
             ))}
           </div>
 
-          {filtered.length === 0 && (
+          {postsLoading && posts.length === 0 && (
+            <div className="text-center py-12">
+              <svg className="animate-spin h-8 w-8 mx-auto text-blue-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              <p className="text-slate-400">Loading community posts...</p>
+            </div>
+          )}
+
+          {!postsLoading && filtered.length === 0 && (
             <div className="text-center py-12">
               <div className="text-4xl mb-3">🔍</div>
               <p className="text-slate-400">No posts found for this filter. Be the first to post!</p>

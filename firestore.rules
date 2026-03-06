@@ -52,5 +52,17 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
+    // Community posts: any authenticated user can read/create, update for votes
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+
+      // Replies subcollection
+      match /replies/{replyId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+      }
+    }
   }
 }
