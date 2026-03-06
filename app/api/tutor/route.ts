@@ -140,23 +140,58 @@ Student learning style: ${dna.learningStyle || 'unknown'}
 Personality traits: ${JSON.stringify(dna.personalityTraits || [])}
 Peak focus time: ${studentData.studyPatterns?.peakFocusTime || 'unknown'}
 
-Performance per topic:
+Detailed performance per topic:
 ${Object.entries(topics).map(([k, v]: any) =>
-  `- ${v.name}: confidence ${Math.round((v.confidence || 0) * 100)}%, mistakes: ${v.mistakesMade || 0}, retention: ${Math.round((v.memoryRetentionRate || 0) * 100)}%, completed: ${v.completed}`
+  `- ${v.name}:
+    * Confidence: ${Math.round((v.confidence || 0) * 100)}%
+    * Memory Retention: ${Math.round((v.memoryRetentionRate || 0) * 100)}%
+    * Mistakes Made: ${v.mistakesMade || 0}
+    * Flashcard Difficulty: ${v.flashcardDifficulty || 'unknown'}
+    * Time Spent: ${v.timeTakenMinutes || 0} minutes
+    * Study Method Used: ${v.studyMethod || 'unknown'}
+    * Completed: ${v.completed}
+    * Hint: ${v.hint || 'none'}`
 ).join('\n')}
+
+Study patterns:
+- Peak focus time: ${studentData.studyPatterns?.peakFocusTime || 'unknown'}
+- Preferred session length: ${studentData.studyPatterns?.preferredSessionLengthMinutes || 'unknown'} minutes
+- Review frequency: ${studentData.studyPatterns?.reviewFrequency || 'unknown'}
+- Best day: ${studentData.studyPatterns?.bestDayOfWeek || 'unknown'}
+- Worst day: ${studentData.studyPatterns?.worstDayOfWeek || 'unknown'}
+
+Easiest topics: ${JSON.stringify(studentData.topicInsights?.easiestTopics || [])}
+Hardest topics: ${JSON.stringify(studentData.topicInsights?.hardestTopics || [])}
+Most time consuming: ${JSON.stringify(studentData.topicInsights?.mostTimeConsuming || [])}
 
 Quiz score history: ${JSON.stringify(historyScores)}
 Predicted next score: ${pred}, Trend: ${status}
 Topics to focus next: ${JSON.stringify(studentData.predictions?.topicsToFocusNext || [])}
 ${courseContext}
 
-Student question: ${questionText}${hasImage ? ' (The student attached an image — read it and address any doubt or question shown.)' : ''}
+Student question: ${question}
 
-Based on the student's performance data AND the relevant course material above:
+Recent quiz mistakes:
+${Object.entries(studentData.quizDetails || {}).map(([quiz, details]: any) =>
+  `${quiz} (${details.topic}, score: ${details.score}/${details.totalQuestions}):
+${(details.wrongQuestions || []).map((q: any) =>
+  `  - Question: "${q.question}"
+     Student answered: "${q.studentAnswer}"
+     Correct answer: "${q.correctAnswer}"
+     Concept: ${q.concept}
+     Mistake type: ${q.mistakeType}`
+).join('\n')}`
+).join('\n\n')}
+
+Based on the student's performance data, quiz mistakes AND the relevant course material above:
 1. Answer their question directly, referencing specific lecture content where relevant.
-2. Connect your answer to their personal weak areas if applicable.
-3. Suggest a specific next action (flashcard, practice test, or worked example).
-4. Keep it concise, specific, and encouraging.
+2. Mention specific quiz mistakes that relate to their question — call out exact wrong answers.
+3. Analyse their memory retention and confidence for related topics — use the actual numbers.
+4. Reference their mistake pattern (conceptual vs memory mistakes) to explain why they struggle.
+5. Look at their study patterns (peak focus time: ${studentData.studyPatterns?.peakFocusTime}, best day: ${studentData.studyPatterns?.bestDayOfWeek}) and tailor advice around those.
+6. Suggest a very specific next action based on their flashcard difficulty and preferred study method.
+7. Be detailed, data-driven, and encouraging — like a personal tutor who knows everything about this student.
+
 `;
 
     // ── Step 4: Call OpenAI (vision when image attached) ──
