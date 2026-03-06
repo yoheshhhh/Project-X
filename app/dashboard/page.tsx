@@ -178,13 +178,13 @@ export default function DashboardPage() {
       <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
-          <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button>
-            <button onClick={() => window.location.href = '/insights'} className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-4 py-2 rounded-lg transition-all">🧠 AI Insights</button>
-            <button onClick={() => window.location.href = '/community'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Community</button>
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <button onClick={() => window.location.href = '/course'} className="hidden sm:block bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button>
+            <button onClick={() => window.location.href = '/insights'} className="bg-blue-500 hover:bg-blue-600 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg transition-all">🧠 Insights</button>
+            <button onClick={() => window.location.href = '/community'} className="hidden sm:block bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Community</button>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">{data.student.name.charAt(0)}</div>
-              <span className="text-sm text-slate-300">{data.student.name}</span>
+              <span className="text-sm text-slate-300 hidden sm:inline">{data.student.name}</span>
             </div>
           </div>
         </div>
@@ -220,7 +220,7 @@ export default function DashboardPage() {
         )}
 
         {/* Top Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🧠</span>

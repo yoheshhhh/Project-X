@@ -37,3 +37,56 @@ body {
 /* Smooth page transitions */
 .page-enter { opacity: 0; transform: translateY(10px); }
 .page-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
+
+/* ── Print / PDF export styles ───────────────────────────── */
+@media print {
+  body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .min-h-screen { background: white !important; }
+  [class*="bg-white/5"], [class*="bg-white/10"] { background-color: #f8fafc !important; border-color: #e2e8f0 !important; }
+  [class*="border-white/10"] { border-color: #e2e8f0 !important; }
+  .text-white { color: #0f172a !important; }
+  .text-slate-300, .text-slate-400, .text-slate-500 { color: #475569 !important; }
+  [class*="backdrop-blur"] { background: white !important; }
+  .print\:hidden, button, select, .fixed { display: none !important; }
+  @page { margin: 1cm; size: A4; }
+}
+
+/* Scrollbar hide for tab bars */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Light mode overrides ───────────────────────────────── */
+body.light-mode {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+/* Gradient backgrounds → light equivalents */
+body.light-mode .min-h-screen { background: linear-gradient(135deg, #f1f5f9, #e2e8f0, #f1f5f9) !important; }
+
+/* Glass surfaces */
+body.light-mode [class*="bg-white/5"],
+body.light-mode [class*="bg-white/10"] { background-color: rgba(255,255,255,0.7) !important; backdrop-filter: blur(8px); }
+
+body.light-mode [class*="border-white/10"],
+body.light-mode [class*="border-white/15"] { border-color: rgba(0,0,0,0.08) !important; }
+
+/* Text colors */
+body.light-mode .text-white { color: #0f172a !important; }
+body.light-mode .text-slate-300,
+body.light-mode .text-slate-400 { color: #475569 !important; }
+body.light-mode .text-slate-500 { color: #64748b !important; }
+
+/* Inputs / selects */
+body.light-mode select,
+body.light-mode input,
+body.light-mode textarea { background-color: rgba(255,255,255,0.8) !important; color: #0f172a !important; border-color: rgba(0,0,0,0.12) !important; }
+body.light-mode select option { background-color: #fff !important; color: #0f172a !important; }
+
+/* Header / nav bar */
+body.light-mode [class*="backdrop-blur"] { background-color: rgba(255,255,255,0.8) !important; }
+
+/* Buttons */
+body.light-mode [class*="bg-white/10"]:hover,
+body.light-mode [class*="hover:bg-white/20"]:hover { background-color: rgba(0,0,0,0.06) !important; }
+body.light-mode [class*="bg-white/15"] { background-color: rgba(0,0,0,0.08) !important; }

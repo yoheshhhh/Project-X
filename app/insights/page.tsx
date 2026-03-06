@@ -21,7 +21,7 @@ function PredictionTab({ scores, topics }: any) {
       setLoading(false);
     }
     fetchPrediction();
-  }, []);
+  }, [scores, topics]);
   if (loading) return <div className="text-center py-12"><svg className="animate-spin h-8 w-8 mx-auto text-blue-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><p className="text-sm text-blue-300">Running ML prediction model...</p></div>;
   if (!pred || pred.error) return <p className="text-red-400 text-center py-8">Prediction failed. Try refreshing.</p>;
   const o = pred.overall;
@@ -73,20 +73,24 @@ function ModuleDiveTab({ studentData }: { studentData: any }) {
   const [diveData, setDiveData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-generate modules from quiz data — computed, NOT hardcoded
-  const moduleMap: Record<string, string[]> = {
-    'SC1003 M1: Intro to Python': ['Variables', 'Data Types', 'Loops Intro'],
-    'SC1003 M2: Control Structures': ['If-Else', 'For Loops', 'While Loops', 'Nested Loops'],
-    'SC1003 M3: Functions': ['Functions Intro', 'Scope', 'Return Values', 'Recursion'],
-  };
-  const modules = Object.entries(moduleMap).map(([name, topics]) => {
-    const segs = topics.map(t => {
-      const sc = studentData.quizHistory.filter((q: any) => q.topic === t);
-      const avg = sc.length ? Math.round(sc.reduce((a: number, b: any) => a + b.score, 0) / sc.length) : 0;
-      return { name: t, score: avg, attempts: sc.length, flashcardOpens: sc.length, mastery: sc.length === 0 ? 'locked' : avg >= 85 ? 'mastered' : avg >= 70 ? 'developing' : 'struggling' };
+  // Derive modules dynamically from quizHistory — group by moduleId, then list topics
+  const modules = (() => {
+    const byModule: Record<string, Set<string>> = {};
+    (studentData.quizHistory || []).forEach((q: any) => {
+      const mod = q.moduleId || 'unknown';
+      if (!byModule[mod]) byModule[mod] = new Set();
+      byModule[mod].add(q.topic);
     });
-    return { name, progress: Math.round(segs.filter(s => s.mastery !== 'locked').length / segs.length * 100), segments: segs };
-  });
+    return Object.entries(byModule).map(([modId, topicSet]) => {
+      const topics = Array.from(topicSet);
+      const segs = topics.map(t => {
+        const sc = studentData.quizHistory.filter((q: any) => q.topic === t);
+        const avg = sc.length ? Math.round(sc.reduce((a: number, b: any) => a + b.score, 0) / sc.length) : 0;
+        return { name: t, score: avg, attempts: sc.length, flashcardOpens: sc.length, mastery: sc.length === 0 ? 'locked' : avg >= 85 ? 'mastered' : avg >= 70 ? 'developing' : 'struggling' };
+      });
+      return { name: modId, progress: Math.round(segs.filter(s => s.mastery !== 'locked').length / segs.length * 100), segments: segs };
+    });
+  })();
 
   const analyze = async (idx: number) => {
     setSelectedModule(idx); setLoading(true);
@@ -260,7 +264,7 @@ function StudyPlanTab({ studentData }: { studentData: any }) {
   const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [completed, setCompleted] = useState<any>({});
-  useEffect(() => { async function fetch_() { try { const res = await authFetch('/api/study-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weakTopics: studentData.weakTopics, strongTopics: studentData.strongTopics, quizHistory: studentData.quizHistory, avgSessionMinutes: studentData.avgSessionMinutes, learningStyle: studentData.learningStyle }) }); setPlan(await res.json()); } catch (e) { console.error(e); } setLoading(false); } fetch_(); }, []);
+  useEffect(() => { setLoading(true); setPlan(null); async function fetch_() { try { const res = await authFetch('/api/study-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weakTopics: studentData.weakTopics, strongTopics: studentData.strongTopics, quizHistory: studentData.quizHistory, avgSessionMinutes: studentData.avgSessionMinutes, learningStyle: studentData.learningStyle }) }); setPlan(await res.json()); } catch (e) { console.error(e); } setLoading(false); } fetch_(); }, [studentData]);
   if (loading) return <div className="text-center py-12"><svg className="animate-spin h-8 w-8 mx-auto text-blue-400 mb-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><p className="text-sm text-blue-300">AI is building your personalized study plan...</p></div>;
   if (!plan) return <p className="text-red-400 text-center py-8">Failed to generate plan.</p>;
   const completedCount = Object.values(completed).filter(Boolean).length;
@@ -418,6 +422,7 @@ export default function InsightsPage() {
   const [expInsight, setExpInsight] = useState<number | null>(null);
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [showSignals, setShowSignals] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   const AVAILABLE_MODULES = [
     { code: 'ALL', name: 'All Modules' },
@@ -483,8 +488,8 @@ export default function InsightsPage() {
         </div>
       </div>
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-start justify-between mb-6">
-          <div><h2 className="text-2xl font-bold text-white mb-1">AI Learning Intelligence 🧠</h2><p className="text-sm text-slate-400"><span className="text-blue-300 font-medium">{selectedModule === 'ALL' ? 'All Modules' : selectedModule}</span> · {filteredStudentData.quizHistory.length} scores, {filteredStudentData.weeksActive} weeks of data</p></div>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+          <div><h2 className="text-xl sm:text-2xl font-bold text-white mb-1">AI Learning Intelligence 🧠</h2><p className="text-sm text-slate-400"><span className="text-blue-300 font-medium">{selectedModule === 'ALL' ? 'All Modules' : selectedModule}</span> · {filteredStudentData.quizHistory.length} scores, {filteredStudentData.weeksActive} weeks of data</p></div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <select
@@ -500,7 +505,8 @@ export default function InsightsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
             </div>
-            <button onClick={fetch_} disabled={loading} className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white text-sm px-5 py-2.5 rounded-xl transition-all">{loading ? '⏳ Analyzing...' : '🔄 Refresh'}</button>
+            <button onClick={() => { setPrinting(true); setTimeout(() => { window.print(); setPrinting(false); }, 300); }} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2.5 rounded-xl transition-all print:hidden">📄 Export</button>
+            <button onClick={fetch_} disabled={loading} className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white text-sm px-5 py-2.5 rounded-xl transition-all print:hidden">{loading ? '⏳ Analyzing...' : '🔄 Refresh'}</button>
           </div>
         </div>
 
@@ -527,9 +533,9 @@ export default function InsightsPage() {
               </div>
             )}
 
-            <div className="flex gap-2 mb-6 flex-wrap">{tabs.map(t => (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'careless' || t.id === 'failures') fetchWeakness(); }} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${tab === t.id ? 'bg-blue-500 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{t.label}</button>))}</div>
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">{tabs.map(t => (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'careless' || t.id === 'failures') fetchWeakness(); }} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${tab === t.id ? 'bg-blue-500 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{t.label}</button>))}</div>
 
-            {tab === 'timeline' && (
+            {(printing || tab === 'timeline') && (
               <div className="space-y-6">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4">Learning Phase Evolution</h3>
@@ -551,7 +557,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'mastery' && (
+            {(printing || tab === 'mastery') && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <h3 className="text-lg font-bold text-white mb-2">🎯 Topic Mastery Heatmap</h3>
                 <p className="text-sm text-slate-400 mb-4">Color-coded by mastery level — green is mastered, amber developing, red struggling</p>
@@ -562,7 +568,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'forgetting' && (
+            {(printing || tab === 'forgetting') && (
               <div className="space-y-4">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-2">🧠 Forgetting Curve Predictor</h3>
@@ -581,7 +587,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'velocity' && (
+            {(printing || tab === 'velocity') && (
               <div className="space-y-4">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4">⚡ Learning Velocity</h3>
@@ -597,7 +603,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'cognitive' && (
+            {(printing || tab === 'cognitive') && (
               <div className="space-y-4">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-2">🔋 Cognitive Load Detector</h3>
@@ -614,7 +620,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'optimal' && (
+            {(printing || tab === 'optimal') && (
               <div className="space-y-4">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-2">⏰ Optimal Study Time Analysis</h3>
@@ -631,8 +637,8 @@ export default function InsightsPage() {
 
             {tab === 'predict' && <PredictionTab scores={filteredStudentData.quizHistory.map((q: any) => q.score)} topics={filteredStudentData.quizHistory} />}
             {tab === 'modules' && <ModuleDiveTab studentData={filteredStudentData} />}
-            {tab === 'careless' && <CarelessWeaknessTab data={weaknessData} />}
-            {tab === 'failures' && <RepeatedFailuresTab data={weaknessData} />}
+            {(printing || tab === 'careless') && <CarelessWeaknessTab data={weaknessData} />}
+            {(printing || tab === 'failures') && <RepeatedFailuresTab data={weaknessData} />}
             {tab === 'flashcards' && <FlashcardsTab studentData={filteredStudentData} />}
             {tab === 'studyplan' && <StudyPlanTab studentData={filteredStudentData} />}
             {tab === 'agents' && <AgentVisualizerTab studentData={filteredStudentData} />}
@@ -669,7 +675,7 @@ export default function InsightsPage() {
               </div>
             ))}</div>}
 
-            {tab === 'explainable' && <div className="space-y-4">{(ins.explainableInsights || []).map((item: any, i: number) => (
+            {(printing || tab === 'explainable') && <div className="space-y-4">{(ins.explainableInsights || []).map((item: any, i: number) => (
               <div key={i} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                 <div className="p-5 cursor-pointer" onClick={() => setExpInsight(expInsight === i ? null : i)}>
                   <div className="flex items-start justify-between gap-4"><div className="flex-1"><p className="text-sm font-bold text-white mb-1">{item.insight}</p><p className="text-xs text-slate-400">{item.recommendation}</p></div><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-full border-2 flex items-center justify-center" style={{ borderColor: item.confidence > 0.8 ? '#22c55e' : '#f59e0b' }}><span className="text-xs font-bold text-white">{Math.round(item.confidence * 100)}%</span></div><span className="text-slate-500">{expInsight === i ? '▲' : '▼'}</span></div></div>
@@ -678,7 +684,7 @@ export default function InsightsPage() {
               </div>
             ))}</div>}
 
-            {tab === 'report' && ins.weeklyReport && (
+            {(printing || tab === 'report') && ins.weeklyReport && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">📋 AI Weekly Report</h3>
                 <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-4"><p className="text-sm text-slate-200 leading-relaxed">{ins.weeklyReport.summary}</p></div>
@@ -691,7 +697,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'adaptive' && <div className="space-y-4">{(ins.adaptiveRecommendations || []).map((r: any, i: number) => {
+            {(printing || tab === 'adaptive') && <div className="space-y-4">{(ins.adaptiveRecommendations || []).map((r: any, i: number) => {
               const icons: any = { content:'📚', schedule:'📅', difficulty:'⚙️', format:'🎨' };
               const colors: any = { content:'#3b82f6', schedule:'#22c55e', difficulty:'#f59e0b', format:'#8b5cf6' };
               return (<div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6"><div className="flex items-start gap-4"><div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: (colors[r.category]||'#3b82f6') + '20' }}>{icons[r.category]||'🎯'}</div><div className="flex-1"><p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors[r.category] }}>{r.category}</p><p className="text-base font-bold text-white mb-3">{r.recommendation}</p><div className="grid grid-cols-2 gap-3"><div className="p-3 bg-white/5 rounded-xl"><p className="text-xs text-slate-400 mb-1">🧠 Reason</p><p className="text-xs text-slate-300">{r.reason}</p></div><div className="p-3 rounded-xl" style={{ backgroundColor: (colors[r.category]||'#3b82f6') + '15' }}><p className="text-xs mb-1" style={{ color: colors[r.category] }}>📈 Impact</p><p className="text-xs text-slate-300">{r.expectedImpact}</p></div></div></div></div></div>);

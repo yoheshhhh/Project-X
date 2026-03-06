@@ -106,6 +106,12 @@ export default function PracticePaperPage() {
   const [saGrades, setSaGrades] = useState<Record<string, { score: number; feedback: string }>>({});
   const [gradingInProgress, setGradingInProgress] = useState(false);
 
+  /* State: history */
+  const [history, setHistory] = useState<any[]>([]);
+  useEffect(() => {
+    try { setHistory(JSON.parse(localStorage.getItem('pp_history') || '[]')); } catch { setHistory([]); }
+  }, []);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ── Timer ──────────────────────────────────────────────────────────── */
@@ -204,6 +210,13 @@ export default function PracticePaperPage() {
 
   /* ── Submit & Grade ─────────────────────────────────────────────────── */
 
+  const saveToHistory = useCallback((pct: number) => {
+    const entry = { id: Date.now(), date: new Date().toISOString(), title: paper?.title || 'Practice Paper', score: pct, totalMarks: paper?.totalMarks || 0, topics: paper?.meta.topicsCovered || [], questions: paper?.meta.questionsGenerated || 0 };
+    const updated = [entry, ...history].slice(0, 20);
+    setHistory(updated);
+    try { localStorage.setItem('pp_history', JSON.stringify(updated)); } catch { /* ignore */ }
+  }, [paper, history]);
+
   const handleSubmit = useCallback(async () => {
     setTimerActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
@@ -242,7 +255,15 @@ export default function PracticePaperPage() {
 
     setSaGrades(grades);
     setGradingInProgress(false);
-  }, [paper, saAnswers]);
+
+    // Save to history
+    const mcqSection = paper.sections.find(s => s.questions[0]?.type === 'mcq');
+    let mcqS = 0;
+    (mcqSection?.questions as MCQQuestion[] || []).forEach(q => { if (mcqAnswers[q.id] === q.correctIndex) mcqS += q.marks; });
+    let saS = 0; Object.values(grades).forEach(g => { saS += g.score; });
+    const pct = paper.totalMarks > 0 ? Math.round(((mcqS + saS) / paper.totalMarks) * 100) : 0;
+    saveToHistory(pct);
+  }, [paper, saAnswers, mcqAnswers, saveToHistory]);
 
   /* ── Score Calculation ──────────────────────────────────────────────── */
 
@@ -458,6 +479,30 @@ export default function PracticePaperPage() {
                 {selectedSubTopics.length > 8 && (
                   <span className="text-xs text-slate-500">+{selectedSubTopics.length - 8} more</span>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Paper History */}
+          {history.length > 0 && (
+            <div className="mt-8 bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">📜 Past Papers</h3>
+                <button onClick={() => { localStorage.removeItem('pp_history'); setHistory([]); }} className="text-xs text-slate-500 hover:text-red-400 transition-all">Clear All</button>
+              </div>
+              <div className="space-y-2">
+                {history.map((h: any) => {
+                  const c = h.score >= 80 ? 'text-green-400' : h.score >= 60 ? 'text-amber-400' : 'text-red-400';
+                  return (
+                    <div key={h.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                      <div>
+                        <p className="text-sm text-white font-medium">{h.title}</p>
+                        <p className="text-xs text-slate-500">{new Date(h.date).toLocaleDateString()} · {h.questions} questions · {(h.topics || []).slice(0, 3).join(', ')}</p>
+                      </div>
+                      <p className={`text-xl font-extrabold ${c}`}>{h.score}%</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
