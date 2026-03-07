@@ -28,46 +28,26 @@ const QUICK_PROMPTS = [
   'Best time to study?',
 ];
 
-/* ── Simple Markdown Renderer ─────────────────────────────────────────── */
-
 function renderMarkdown(text: string) {
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
   let key = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    if (!line.trim()) {
-      elements.push(<div key={key++} className="h-2" />);
-      continue;
-    }
-
+    const line = lines[i];
+    if (!line.trim()) { elements.push(<div key={key++} className="h-2" />); continue; }
     const numMatch = line.match(/^(\d+)[.)]\s+(.+)/);
     if (numMatch) {
-      elements.push(
-        <div key={key++} className="flex gap-2 ml-1 my-0.5">
-          <span className="text-blue-400 font-bold shrink-0">{numMatch[1]}.</span>
-          <span>{inlineFormat(numMatch[2])}</span>
-        </div>
-      );
+      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-blue-400 font-bold shrink-0">{numMatch[1]}.</span><span>{inlineFormat(numMatch[2])}</span></div>);
       continue;
     }
-
     const bulletMatch = line.match(/^[-*•]\s+(.+)/);
     if (bulletMatch) {
-      elements.push(
-        <div key={key++} className="flex gap-2 ml-1 my-0.5">
-          <span className="text-blue-400 shrink-0">•</span>
-          <span>{inlineFormat(bulletMatch[1])}</span>
-        </div>
-      );
+      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-blue-400 shrink-0">•</span><span>{inlineFormat(bulletMatch[1])}</span></div>);
       continue;
     }
-
     elements.push(<p key={key++} className="my-0.5">{inlineFormat(line)}</p>);
   }
-
   return <>{elements}</>;
 }
 
@@ -75,50 +55,35 @@ function inlineFormat(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
-
   while (remaining.length > 0) {
     const boldMatch = remaining.match(/^([\s\S]*?)\*\*([\s\S]+?)\*\*([\s\S]*)/);
     if (boldMatch) {
       if (boldMatch[1]) parts.push(<span key={key++}>{boldMatch[1]}</span>);
       parts.push(<strong key={key++} className="text-white font-bold">{boldMatch[2]}</strong>);
-      remaining = boldMatch[3];
-      continue;
+      remaining = boldMatch[3]; continue;
     }
-
     const italicMatch = remaining.match(/^([\s\S]*?)\*([\s\S]+?)\*([\s\S]*)/);
     if (italicMatch) {
       if (italicMatch[1]) parts.push(<span key={key++}>{italicMatch[1]}</span>);
       parts.push(<em key={key++} className="text-blue-300">{italicMatch[2]}</em>);
-      remaining = italicMatch[3];
-      continue;
+      remaining = italicMatch[3]; continue;
     }
-
     const codeMatch = remaining.match(/^([\s\S]*?)`([\s\S]+?)`([\s\S]*)/);
     if (codeMatch) {
       if (codeMatch[1]) parts.push(<span key={key++}>{codeMatch[1]}</span>);
       parts.push(<code key={key++} className="bg-white/10 text-amber-300 px-1.5 py-0.5 rounded text-xs">{codeMatch[2]}</code>);
-      remaining = codeMatch[3];
-      continue;
+      remaining = codeMatch[3]; continue;
     }
-
-    parts.push(<span key={key++}>{remaining}</span>);
-    break;
+    parts.push(<span key={key++}>{remaining}</span>); break;
   }
-
   return <>{parts}</>;
 }
-
-/* ── Component ─────────────────────────────────────────────────────────── */
 
 export default function AITutor() {
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<ChatSize>('compact');
   const [messages, setMessages] = useState<Message[]>([
-<<<<<<< Updated upstream
     { role: 'ai', text: 'Hi! I\'m your Guardian AI Tutor 🛡️ I have full access to your learning analytics — memory retention, cognitive load, optimal study times, and predicted scores. Ask me anything about your studies!' },
-=======
-    { role: 'ai', text: 'Hi! I\'m your Guardian AI Tutor 🛡️ I have access to your learning data — quiz scores, topic confidence, study patterns, and your actual lecture material. Ask me anything!' },
->>>>>>> Stashed changes
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -145,9 +110,14 @@ export default function AITutor() {
     setLoading(true);
 
     try {
-<<<<<<< Updated upstream
-      // Build learning context from student data for the AI coach
-      const learningContext = {
+      // Build conversation history for context
+      const conversationHistory = [...messages, userMsg].map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      }));
+
+      // Build learning context from student data
+      const learningContext = studentData ? {
         overallRetention: studentData?.overallRetention,
         retentionRates: (studentData?.retentionRates || []).map((r: any) => ({
           topic: r.topic, retention: r.retention, urgency: r.urgency, daysSinceStudied: r.daysSinceStudied,
@@ -169,51 +139,29 @@ export default function AITutor() {
         knowledgeMap: (studentData?.knowledgeMap || []).map((n: any) => ({
           topic: n.topic, mastery: n.mastery, status: n.status,
         })),
-      };
+      } : null;
 
       const res = await authFetch('/api/tutor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: questionToSend, image: imageToSend, learningContext }),
-      });
-      const apiData = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: apiData.answer || 'Sorry, couldn\'t process that. Try again!' }]);
-=======
-      // Build conversation history for context
-      const conversationHistory = [...messages, userMsg].map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.text,
-      }));
-
-      const res = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: questionToSend,
           image: imageToSend,
+          learningContext,
           conversationHistory,
         }),
       });
 
-      const data = await res.json();
-      const aiText = data.answer || 'Sorry, couldn\'t process that. Try again!';
-      const ragSources = data.ragSources;
+      const apiData = await res.json();
+      const aiText = apiData.answer || 'Sorry, couldn\'t process that. Try again!';
+      const ragSources = apiData.ragSources;
 
-      setMessages(prev => [...prev, {
-        role: 'ai',
-        text: aiText,
-        ragSources,
-      }]);
->>>>>>> Stashed changes
+      setMessages(prev => [...prev, { role: 'ai', text: aiText, ragSources }]);
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Connection issue — please try again.' }]);
     }
     setLoading(false);
-<<<<<<< Updated upstream
-  }, [input, loading, attachedImage, studentData]);
-=======
-  }, [input, loading, attachedImage, messages]);
->>>>>>> Stashed changes
+  }, [input, loading, attachedImage, messages, studentData]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -228,8 +176,6 @@ export default function AITutor() {
     setMessages([{ role: 'ai', text: 'Chat cleared! 🛡️ Ask me anything about your studies.' }]);
   };
 
-  /* ── Floating Button ──────────────────────────────────────────────── */
-
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
@@ -239,8 +185,6 @@ export default function AITutor() {
       </button>
     );
   }
-
-  /* ── Chat Window ──────────────────────────────────────────────────── */
 
   const isFs = size === 'fullscreen';
 
@@ -252,11 +196,7 @@ export default function AITutor() {
           <span className="text-xl">🛡️</span>
           <div>
             <p className="text-sm font-bold text-white">Guardian AI Tutor</p>
-<<<<<<< Updated upstream
-            <p className="text-xs text-blue-300">SC3010 Computer Security · Powered by OpenAI</p>
-=======
-            <p className="text-xs text-blue-300">SC3010 Computer Security · RAG-powered</p>
->>>>>>> Stashed changes
+            <p className="text-xs text-blue-300">SC3010 · RAG-powered · Live Analytics</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -286,14 +226,11 @@ export default function AITutor() {
                 ? 'bg-blue-500 text-white rounded-br-md'
                 : 'bg-white/10 text-slate-200 rounded-bl-md'
             }`}>
-              {m.role === 'ai' && (
-                <span className="text-xs text-blue-400 font-bold block mb-1">🛡️ Guardian AI</span>
-              )}
+              {m.role === 'ai' && <span className="text-xs text-blue-400 font-bold block mb-1">🛡️ Guardian AI</span>}
               {m.role === 'user' && m.image && (
                 <img src={m.image} alt="Attached" className="mb-2 max-h-32 rounded-lg object-contain border border-white/20" />
               )}
 
-              {/* Message content */}
               {m.role === 'ai' ? renderMarkdown(m.text) : m.text}
 
               {/* RAG Sources */}
